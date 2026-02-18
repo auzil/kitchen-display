@@ -1,0 +1,177 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+}
+
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+header h1 {
+  font-size: 1.5rem;
+}
+
+.wait-badge {
+  background: #e94560;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.order-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.order-form input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #16213e;
+  color: #eee;
+  font-size: 0.9rem;
+}
+
+.order-form button {
+  padding: 10px 20px;
+  background: #e94560;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+
+.column {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 300px;
+}
+
+.column h2 {
+  font-size: 1rem;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #333;
+}
+
+.column.pending h2 { border-color: #f0a500; }
+.column.preparing h2 { border-color: #4da8da; }
+.column.ready h2 { border-color: #2ecc71; }
+
+.order-card {
+  background: #0f3460;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.order-card ul {
+  list-style: none;
+  margin-bottom: 8px;
+}
+
+.order-card ul li::before {
+  content: "• ";
+  color: #4da8da;
+}
+
+.order-time {
+  font-size: 0.75rem;
+  color: #888;
+  margin-bottom: 8px;
+}
+
+.order-card button {
+  width: 100%;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.8rem;
+  background: #e94560;
+  color: #fff;
+}
+
+.order-card button:hover {
+  opacity: 0.85;
+}
+
+.activity-feed {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.activity-feed h2 {
+  font-size: 1rem;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #333;
+}
+
+.activity-feed ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.activity-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: #0f3460;
+  border-left: 3px solid #333;
+}
+
+.activity-item.activity-created  { border-color: #f0a500; }
+.activity-item.activity-preparing { border-color: #4da8da; }
+.activity-item.activity-ready     { border-color: #2ecc71; }
+
+.activity-time {
+  color: #888;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  margin-left: 12px;
+}
