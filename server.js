@@ -20,104 +20,105 @@ let nextId = 1;
 let activities = [];
 let nextActivityId = 1;
 
-/**
- * LIVE CODING TASK #2: Activity Feed
- *
- * Requirements:
- * 1) Define activityMessages map with three keys:
- *    - created:   (o) => human-readable string when an order is placed
- *                        e.g. "Order #1 placed — Table 3 (Burger, Cola)"
- *    - preparing: (o) => string when order moves to preparing
- *    - ready:     (o) => string when order is ready
- * 2) Implement addActivity(type, order):
- *    - Build an activity object: { id, type, orderId, message, timestamp }
- *      - id: nextActivityId++ (auto-increment)
- *      - message: call activityMessages[type](order)
- *      - timestamp: ISO string
- *    - Push the activity to the `activities` array
- *    - Return the activity
- */
+// Task B: add kitchenNotes store here
+// let kitchenNotes = [];
+// let nextNoteId = 1;
+
 const activityMessages = {
-  // TODO: created, preparing, ready
+  created: (o) => `Order #${o.id} placed — Table ${o.table} (${o.items.join(', ')})`,
+  preparing: (o) => `Order #${o.id} is now being prepared`,
+  ready: (o) => `Order #${o.id} is ready!`,
 };
 
 function addActivity(type, order) {
-  // TODO: implement per requirements above
+  const activity = {
+    id: nextActivityId++,
+    type,
+    orderId: order.id,
+    message: activityMessages[type](order),
+    timestamp: new Date().toISOString(),
+  };
+  activities.push(activity);
+  return activity;
 }
 
-
-/**
- * Calculate estimated wait time (minutes) based on queue
- * LIVE CODING TASK #1:
- * Wait-time estimation:
- *   - Should consider number of items per order.
- *   - Pending: 5 min per item, preparing: 3 min per item.
- *   Return estimate.
- */
 function getEstimatedWait() {
+  const pending = orders.filter((o) => o.status === 'pending');
+  const pendingItemsCount = pending.reduce((acc, item) => {
+    return acc += item.items.length;
+  }, 0);
 
+  const preparing = orders.filter((o) => o.status === 'preparing');
+  const preparingItemsCount = preparing.reduce((acc, item) => {
+    return acc += item.items.length;
+  }, 0);
+
+  return pendingItemsCount * 5 + preparingItemsCount * 3;
 }
 
-/**
- * LIVE CODING TASK:
- * Implement order creation with validation + consistent responses.
- *
- * Requirements:
- * 1) Endpoint: POST /api/orders
- * 2) Input body:
- *    - items: required array of strings (e.g. ["Burger", "Cola"])
- *    - table: optional string|number (if missing, store "N/A")
- * 3) Validation:
- *    - 400 if items missing/empty
- *    - 400 if any item is invalid (empty string, not a string, etc.)
- * 4) Creation:
- *    - Create an order object:
- *        { id, items, table, status: "pending", createdAt }
- *    - Store it in `orders` (in-memory)
- * 5) Side effects:
- *    - Call addActivity('created', order) → returns the new activity
- *    - Emit: io.emit('order:created', { order, estimatedWait: getEstimatedWait(), activity })
- * 6) Response:
- *    - 201 with: { order, estimatedWait: getEstimatedWait() }
- *
- * Bonus:
- * - Normalize items (trim names)
- * - Store items internally in one normalized format: [{ name: string }]
- * - Reject unknown fields in the body
- */
+// REST: Create order
 app.post('/api/orders', (req, res) => {
-  // TODO: implement per requirements above
+  const { items, table } = req.body;
+  if (!items || !items.length) {
+    return res.status(400).json({ error: 'Items are required' });
+  }
+
+  const order = {
+    id: nextId++,
+    items,
+    table: table || 'N/A',
+    status: 'pending',
+    // Task A: add priority field with default value 'normal'
+    createdAt: new Date().toISOString(),
+  };
+
+  orders.push(order);
+  const createdActivity = addActivity('created', order);
+  io.emit('order:created', { order, estimatedWait: getEstimatedWait(), activity: createdActivity });
+  res.status(201).json({ order, estimatedWait: getEstimatedWait() });
 });
 
-
-/**
- * LIVE CODING TASK:
- * Implement order status updates with explicit target status + transition validation.
- *
- * Requirements:
- * 1) Endpoint: PATCH /api/orders/:id/status
- * 2) Input: { status: "pending" | "preparing" | "ready" }   (required)
- * 3) Validation:
- *    - 404 if order not found
- *    - 400 if body.status is missing/invalid
- *    - Allowed transitions: pending -> preparing -> ready
- *    - No skipping states (pending -> ready) unless ?force=true
- *    - If already in requested status, return 200 (idempotent) with the order unchanged
- *    - For invalid transition return 409 Conflict
- * 4) Side effects:
- *    - Update order.status
- *    - Call addActivity(newStatus, order) → returns the new activity
- *    - Emit: io.emit('order:updated', { order, estimatedWait: getEstimatedWait(), activity })
- * 5) Response:
- *    - res.json({ order })
- **/
+// REST: Update order status (pending → preparing → ready)
 app.patch('/api/orders/:id/status', (req, res) => {
-  // TODO: implement per requirements above
+  const order = orders.find((o) => o.id === Number(req.params.id));
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  const flow = { pending: 'preparing', preparing: 'ready' };
+  const next = flow[order.status];
+  if (!next) return res.status(400).json({ error: 'Order already completed' });
+
+  order.status = next;
+  const updatedActivity = addActivity(next, order);
+  io.emit('order:updated', { order, estimatedWait: getEstimatedWait(), activity: updatedActivity });
+  res.json({ order });
 });
 
-// Socket.io: send current state on connect
+// Task A: PATCH /api/orders/:id/priority
+// - 404 if order not found
+// - 400 if priority is missing or not 'urgent' | 'normal'
+// - 400 if order.status === 'ready' (can't reprioritize a finished order)
+// - Idempotent: if already at the requested priority, return 200 unchanged
+// - Update order.priority
+// - Emit: io.emit('order:priority', { order })
+// - Respond: 200 { order }
+
+// Task B: POST /api/kitchen/notes
+// - 400 if text is missing, not a string, or empty after trim
+// - 400 if text.length > 500
+// - Create: { id: nextNoteId++, text: text.trim(), createdAt: new Date().toISOString(), author: 'Kitchen' }
+// - Push to kitchenNotes
+// - Emit: io.emit('kitchen:note:added', { note })
+// - Respond: 201 { note }
+
+// Task B: DELETE /api/kitchen/notes/:id
+// - 404 if note not found
+// - Remove from kitchenNotes
+// - Emit: io.emit('kitchen:note:removed', { noteId: Number(req.params.id) })
+// - Respond: 204 — no body, do not call res.json()
+
+// Task: Socket.io — on every new connection, emit 'orders:init' with current state
 io.on('connection', (socket) => {
-  socket.emit('orders:init', { orders, estimatedWait: getEstimatedWait(), activities });
+  // Task 0: emit 'orders:init' with { orders, estimatedWait, activities }
 });
 
 const PORT = process.env.PORT || 4001;

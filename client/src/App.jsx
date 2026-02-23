@@ -5,31 +5,43 @@ import './App.css';
 const API = '/api';
 const socket = io();
 
+// ---------------------------------------------------------------------------
+// OrderCard
+// ---------------------------------------------------------------------------
 function OrderCard({ order, onAdvance }) {
   const nextLabel = { pending: 'Start Preparing', preparing: 'Mark Ready' };
+
   return (
     <div className="order-card">
       <div className="order-header">
         <strong>#{order.id}</strong>
         <span>Table {order.table}</span>
       </div>
+
       <ul>
         {order.items.map((item, i) => (
           <li key={i}>{item}</li>
         ))}
       </ul>
+
       <div className="order-time">
         {new Date(order.createdAt).toLocaleTimeString()}
       </div>
+
       {nextLabel[order.status] && (
         <button onClick={() => onAdvance(order.id)}>
           {nextLabel[order.status]}
         </button>
       )}
+
+      {/* Task A: add urgent badge and priority toggle button */}
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// OrderForm
+// ---------------------------------------------------------------------------
 function OrderForm({ onSubmit }) {
   const [items, setItems] = useState('');
   const [table, setTable] = useState('');
@@ -63,6 +75,9 @@ function OrderForm({ onSubmit }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// ActivityFeed
+// ---------------------------------------------------------------------------
 function ActivityFeed({ activities }) {
   return (
     <div className="activity-feed">
@@ -79,18 +94,24 @@ function ActivityFeed({ activities }) {
   );
 }
 
+// Task B: add KitchenNotesBoard component here
+
+// ---------------------------------------------------------------------------
+// App
+// ---------------------------------------------------------------------------
 export default function App() {
   const [orders, setOrders] = useState([]);
   const [estimatedWait, setEstimatedWait] = useState(0);
   const [activities, setActivities] = useState([]);
+  // Task B: add kitchenNotes state
+  // Task C: add connected state (initialize from socket.connected)
 
-
-  // this one could be also removed and implemented during live coding part
   useEffect(() => {
     socket.on('orders:init', (data) => {
       setOrders(data.orders);
       setEstimatedWait(data.estimatedWait);
       setActivities(data.activities || []);
+      // Task B: also set kitchenNotes from data
     });
 
     socket.on('order:created', (data) => {
@@ -107,10 +128,19 @@ export default function App() {
       if (data.activity) setActivities((prev) => [...prev, data.activity]);
     });
 
+    // Task A: handle 'order:priority' socket event
+
+    // Task B: handle 'kitchen:note:added' and 'kitchen:note:removed' socket events
+
+    // Task C: handle 'connect' and 'disconnect' socket events
+
     return () => {
       socket.off('orders:init');
       socket.off('order:created');
       socket.off('order:updated');
+      // Task A: socket.off('order:priority')
+      // Task B: socket.off('kitchen:note:added') / socket.off('kitchen:note:removed')
+      // Task C: socket.off('connect') / socket.off('disconnect')
     };
   }, []);
 
@@ -126,35 +156,59 @@ export default function App() {
     await fetch(`${API}/orders/${id}/status`, { method: 'PATCH' });
   };
 
+  // Task A: add togglePriority function
+
+  // Task B: add postNote and deleteNote functions
+
   const pending = orders.filter((o) => o.status === 'pending');
   const preparing = orders.filter((o) => o.status === 'preparing');
+  // Task A: sort pending and preparing by priority (urgent first)
   const ready = orders.filter((o) => o.status === 'ready');
 
   return (
     <div className="app">
       <header>
         <h1>Kitchen Display</h1>
+        {/* Task C: add connection badge */}
         <span className="wait-badge">Est. wait: {estimatedWait} min</span>
       </header>
+
       <OrderForm onSubmit={createOrder} />
       <ActivityFeed activities={activities} />
+
+      {/* Task B: render KitchenNotesBoard here */}
+
       <div className="columns">
         <div className="column pending">
           <h2>Pending ({pending.length})</h2>
           {pending.map((o) => (
-            <OrderCard key={o.id} order={o} onAdvance={advanceOrder} />
+            // Task A: also pass onTogglePriority={togglePriority}
+            <OrderCard
+              key={o.id}
+              order={o}
+              onAdvance={advanceOrder}
+            />
           ))}
         </div>
         <div className="column preparing">
           <h2>Preparing ({preparing.length})</h2>
           {preparing.map((o) => (
-            <OrderCard key={o.id} order={o} onAdvance={advanceOrder} />
+            // Task A: also pass onTogglePriority={togglePriority}
+            <OrderCard
+              key={o.id}
+              order={o}
+              onAdvance={advanceOrder}
+            />
           ))}
         </div>
         <div className="column ready">
           <h2>Ready ({ready.length})</h2>
           {ready.map((o) => (
-            <OrderCard key={o.id} order={o} onAdvance={advanceOrder} />
+            <OrderCard
+              key={o.id}
+              order={o}
+              onAdvance={advanceOrder}
+            />
           ))}
         </div>
       </div>
