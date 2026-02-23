@@ -20,9 +20,9 @@ let nextId = 1;
 let activities = [];
 let nextActivityId = 1;
 
-// Kitchen notes store
-let kitchenNotes = [];
-let nextNoteId = 1;
+// Task B: add kitchenNotes store here
+// let kitchenNotes = [];
+// let nextNoteId = 1;
 
 const activityMessages = {
   created: (o) => `Order #${o.id} placed — Table ${o.table} (${o.items.join(', ')})`,
@@ -68,7 +68,7 @@ app.post('/api/orders', (req, res) => {
     items,
     table: table || 'N/A',
     status: 'pending',
-    priority: 'normal',
+    // Task A: add priority field with default value 'normal'
     createdAt: new Date().toISOString(),
   };
 
@@ -94,59 +94,32 @@ app.patch('/api/orders/:id/status', (req, res) => {
 });
 
 // Task A: PATCH /api/orders/:id/priority
-app.patch('/api/orders/:id/priority', (req, res) => {
-  const order = orders.find((o) => o.id === Number(req.params.id));
-  if (!order) return res.status(404).json({ error: 'Order not found' });
-
-  const { priority } = req.body;
-  if (!priority || !['urgent', 'normal'].includes(priority)) {
-    return res.status(400).json({ error: 'priority must be "urgent" or "normal"' });
-  }
-  if (order.status === 'ready') {
-    return res.status(400).json({ error: 'Cannot reprioritize a completed order' });
-  }
-
-  // Idempotent: already at requested priority
-  order.priority = priority;
-  io.emit('order:priority', { order });
-  res.json({ order });
-});
+// - 404 if order not found
+// - 400 if priority is missing or not 'urgent' | 'normal'
+// - 400 if order.status === 'ready' (can't reprioritize a finished order)
+// - Idempotent: if already at the requested priority, return 200 unchanged
+// - Update order.priority
+// - Emit: io.emit('order:priority', { order })
+// - Respond: 200 { order }
 
 // Task B: POST /api/kitchen/notes
-app.post('/api/kitchen/notes', (req, res) => {
-  const { text } = req.body;
-  if (!text || typeof text !== 'string' || !text.trim()) {
-    return res.status(400).json({ error: 'text is required and must be a non-empty string' });
-  }
-  if (text.length > 500) {
-    return res.status(400).json({ error: 'text must be 500 characters or fewer' });
-  }
-
-  const note = {
-    id: nextNoteId++,
-    text: text.trim(),
-    createdAt: new Date().toISOString(),
-    author: 'Kitchen',
-  };
-  kitchenNotes.push(note);
-  io.emit('kitchen:note:added', { note });
-  res.status(201).json({ note });
-});
+// - 400 if text is missing, not a string, or empty after trim
+// - 400 if text.length > 500
+// - Create: { id: nextNoteId++, text: text.trim(), createdAt: new Date().toISOString(), author: 'Kitchen' }
+// - Push to kitchenNotes
+// - Emit: io.emit('kitchen:note:added', { note })
+// - Respond: 201 { note }
 
 // Task B: DELETE /api/kitchen/notes/:id
-app.delete('/api/kitchen/notes/:id', (req, res) => {
-  const noteId = Number(req.params.id);
-  const idx = kitchenNotes.findIndex((n) => n.id === noteId);
-  if (idx === -1) return res.status(404).json({ error: 'Note not found' });
-
-  kitchenNotes.splice(idx, 1);
-  io.emit('kitchen:note:removed', { noteId });
-  res.status(204).end();
-});
+// - 404 if note not found
+// - Remove from kitchenNotes
+// - Emit: io.emit('kitchen:note:removed', { noteId: Number(req.params.id) })
+// - Respond: 204 — no body, do not call res.json()
 
 // Socket.io: send current state on connect
+// Task B: extend the payload to also include kitchenNotes
 io.on('connection', (socket) => {
-  socket.emit('orders:init', { orders, estimatedWait: getEstimatedWait(), activities, kitchenNotes });
+  socket.emit('orders:init', { orders, estimatedWait: getEstimatedWait(), activities });
 });
 
 const PORT = process.env.PORT || 4001;
