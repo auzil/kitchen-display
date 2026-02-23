@@ -8,18 +8,13 @@ const socket = io();
 // ---------------------------------------------------------------------------
 // OrderCard
 // ---------------------------------------------------------------------------
-function OrderCard({ order, onAdvance, onTogglePriority }) {
+function OrderCard({ order, onAdvance }) {
   const nextLabel = { pending: 'Start Preparing', preparing: 'Mark Ready' };
 
   return (
-    <div className={`order-card${order.priority === 'urgent' ? ' urgent' : ''}`}>
+    <div className="order-card">
       <div className="order-header">
-        <strong>
-          #{order.id}
-          {order.priority === 'urgent' && (
-            <span className="urgent-badge">URGENT</span>
-          )}
-        </strong>
+        <strong>#{order.id}</strong>
         <span>Table {order.table}</span>
       </div>
 
@@ -39,12 +34,7 @@ function OrderCard({ order, onAdvance, onTogglePriority }) {
         </button>
       )}
 
-      {/* Task A: priority toggle */}
-      {order.status !== 'ready' && (
-        <button className="btn-priority" onClick={() => onTogglePriority(order.id, order.priority)}>
-          {order.priority === 'urgent' ? 'Clear Urgent' : 'Mark Urgent'}
-        </button>
-      )}
+      {/* Task A: add urgent badge and priority toggle button */}
     </div>
   );
 }
@@ -104,45 +94,7 @@ function ActivityFeed({ activities }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// KitchenNotesBoard (Task D)
-// ---------------------------------------------------------------------------
-function KitchenNotesBoard({ notes, onPost, onDelete }) {
-  const [text, setText] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!text.trim()) return;
-    onPost(text.trim());
-    setText('');
-  };
-
-  return (
-    <div className="kitchen-notes-board">
-      <h2>Kitchen Board</h2>
-      <form className="kitchen-notes-form" onSubmit={handleSubmit}>
-        <textarea
-          value={text}
-          maxLength={500}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Post a note..."
-        />
-        <button type="submit">Post</button>
-      </form>
-      <ul style={{ listStyle: 'none' }}>
-        {notes.map((n) => (
-          <li key={n.id} className="kitchen-note-item">
-            <div className="kitchen-note-text">
-              {n.text}
-              <div className="kitchen-note-meta">{new Date(n.createdAt).toLocaleTimeString()}</div>
-            </div>
-            <button onClick={() => onDelete(n.id)}>✕</button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+// Task B: add KitchenNotesBoard component here
 
 // ---------------------------------------------------------------------------
 // App
@@ -151,15 +103,15 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [estimatedWait, setEstimatedWait] = useState(0);
   const [activities, setActivities] = useState([]);
-  const [kitchenNotes, setKitchenNotes] = useState([]); // Task D
-  const [connected, setConnected] = useState(socket.connected); // Task E
+  // Task B: add kitchenNotes state
+  // Task C: add connected state (initialize from socket.connected)
 
   useEffect(() => {
     socket.on('orders:init', (data) => {
       setOrders(data.orders);
       setEstimatedWait(data.estimatedWait);
       setActivities(data.activities || []);
-      setKitchenNotes(data.kitchenNotes || []); // Task D
+      // Task B: also set kitchenNotes from data
     });
 
     socket.on('order:created', (data) => {
@@ -176,34 +128,19 @@ export default function App() {
       if (data.activity) setActivities((prev) => [...prev, data.activity]);
     });
 
-    // Task A: priority update
-    socket.on('order:priority', (data) => {
-      setOrders((prev) => prev.map((o) => o.id === data.order.id ? data.order : o));
-    });
+    // Task A: handle 'order:priority' socket event
 
-    // Task C: kitchen notes
-    socket.on('kitchen:note:added', ({ note }) => {
-      setKitchenNotes((prev) => [note, ...prev]);
-    });
-    socket.on('kitchen:note:removed', ({ noteId }) => {
-      setKitchenNotes((prev) => prev.filter((n) => n.id !== noteId));
-    });
+    // Task B: handle 'kitchen:note:added' and 'kitchen:note:removed' socket events
 
-    // Task E: connection lifecycle
-    // Server emits 'orders:init' with full state on every connection,
-    // so the existing handler above handles state recovery automatically.
-    socket.on('connect', () => setConnected(true));
-    socket.on('disconnect', () => setConnected(false));
+    // Task C: handle 'connect' and 'disconnect' socket events
 
     return () => {
       socket.off('orders:init');
       socket.off('order:created');
       socket.off('order:updated');
-      socket.off('order:priority');
-      socket.off('kitchen:note:added');
-      socket.off('kitchen:note:removed');
-      socket.off('connect');
-      socket.off('disconnect');
+      // Task A: socket.off('order:priority')
+      // Task B: socket.off('kitchen:note:added') / socket.off('kitchen:note:removed')
+      // Task C: socket.off('connect') / socket.off('disconnect')
     };
   }, []);
 
@@ -219,74 +156,48 @@ export default function App() {
     await fetch(`${API}/orders/${id}/status`, { method: 'PATCH' });
   };
 
-  // Task A
-  const togglePriority = async (id, currentPriority) => {
-    const next = currentPriority === 'urgent' ? 'normal' : 'urgent';
-    await fetch(`${API}/orders/${id}/priority`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ priority: next }),
-    });
-  };
+  // Task A: add togglePriority function
 
-  // Task C
-  const postNote = async (text) => {
-    await fetch(`${API}/kitchen/notes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-  };
+  // Task B: add postNote and deleteNote functions
 
-  const deleteNote = async (id) => {
-    await fetch(`${API}/kitchen/notes/${id}`, { method: 'DELETE' });
-  };
-
-  // Task A: sort urgent orders to top in each column
-  const byPriority = (a, b) =>
-    (a.priority === 'urgent' ? 0 : 1) - (b.priority === 'urgent' ? 0 : 1);
-
-  const pending = orders.filter((o) => o.status === 'pending').sort(byPriority);
-  const preparing = orders.filter((o) => o.status === 'preparing').sort(byPriority);
+  const pending = orders.filter((o) => o.status === 'pending');
+  const preparing = orders.filter((o) => o.status === 'preparing');
+  // Task A: sort pending and preparing by priority (urgent first)
   const ready = orders.filter((o) => o.status === 'ready');
 
   return (
     <div className="app">
       <header>
         <h1>Kitchen Display</h1>
-        {/* Task E: connection badge */}
-        <span className={`conn-badge ${connected ? 'live' : 'reconnecting'}`}>
-          {connected ? '● Live' : '● Reconnecting…'}
-        </span>
+        {/* Task C: add connection badge */}
         <span className="wait-badge">Est. wait: {estimatedWait} min</span>
       </header>
 
       <OrderForm onSubmit={createOrder} />
       <ActivityFeed activities={activities} />
 
-      {/* Task D */}
-      <KitchenNotesBoard notes={kitchenNotes} onPost={postNote} onDelete={deleteNote} />
+      {/* Task B: render KitchenNotesBoard here */}
 
       <div className="columns">
         <div className="column pending">
           <h2>Pending ({pending.length})</h2>
           {pending.map((o) => (
+            // Task A: also pass onTogglePriority={togglePriority}
             <OrderCard
               key={o.id}
               order={o}
               onAdvance={advanceOrder}
-              onTogglePriority={togglePriority}
             />
           ))}
         </div>
         <div className="column preparing">
           <h2>Preparing ({preparing.length})</h2>
           {preparing.map((o) => (
+            // Task A: also pass onTogglePriority={togglePriority}
             <OrderCard
               key={o.id}
               order={o}
               onAdvance={advanceOrder}
-              onTogglePriority={togglePriority}
             />
           ))}
         </div>
@@ -297,7 +208,6 @@ export default function App() {
               key={o.id}
               order={o}
               onAdvance={advanceOrder}
-              onTogglePriority={togglePriority}
             />
           ))}
         </div>

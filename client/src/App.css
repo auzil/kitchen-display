@@ -86,6 +86,7 @@ header h1 {
 .column.ready h2 { border-color: #2ecc71; }
 
 .order-card {
+  position: relative;
   background: #0f3460;
   border-radius: 8px;
   padding: 12px;
@@ -213,137 +214,7 @@ header h1 {
   color: #fff;
 }
 
-/* ── Task B: Order Notes ────────────────────────────────────────────────── */
-
-.order-notes {
-  font-size: 0.8rem;
-  color: #bbb;
-  background: #0a2444;
-  border-radius: 4px;
-  padding: 6px 8px;
-  margin: 6px 0;
-  border-left: 3px solid #4da8da;
-  white-space: pre-wrap;
-}
-
-.order-notes.has-notes {
-  border-color: #f0a500;
-}
-
-.notes-edit-area {
-  width: 100%;
-  background: #16213e;
-  border: 1px solid #4da8da;
-  border-radius: 6px;
-  color: #eee;
-  font-size: 0.8rem;
-  padding: 6px 8px;
-  margin: 6px 0;
-  resize: vertical;
-  min-height: 60px;
-}
-
-.notes-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.notes-actions button {
-  flex: 1;
-  padding: 5px;
-  font-size: 0.75rem;
-  border-radius: 5px;
-  border: none;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.btn-save {
-  background: #2ecc71;
-  color: #fff;
-}
-
-.btn-cancel {
-  background: #444;
-  color: #eee;
-}
-
-.order-form textarea {
-  flex: 2;
-  padding: 10px 14px;
-  border: 1px solid #333;
-  border-radius: 8px;
-  background: #16213e;
-  color: #eee;
-  font-size: 0.9rem;
-  resize: none;
-  min-height: 40px;
-}
-
-/* ── Task C: Bulk Select ────────────────────────────────────────────────── */
-
-.order-card.selected {
-  outline: 2px solid #4da8da;
-  outline-offset: 2px;
-}
-
-.order-card .select-checkbox {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-.order-card {
-  position: relative;
-}
-
-.bulk-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: #16213e;
-  border-radius: 10px;
-  padding: 10px 16px;
-  margin-bottom: 16px;
-  border: 1px solid #4da8da;
-}
-
-.bulk-toolbar .bulk-count {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #4da8da;
-  margin-right: auto;
-}
-
-.bulk-toolbar button {
-  padding: 7px 14px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 0.8rem;
-}
-
-.btn-bulk-preparing {
-  background: #4da8da;
-  color: #fff;
-}
-
-.btn-bulk-ready {
-  background: #2ecc71;
-  color: #fff;
-}
-
-.btn-bulk-clear {
-  background: #444;
-  color: #eee;
-}
-
-/* ── Task D: Kitchen Notes Board ────────────────────────────────────────── */
+/* ── Task B: Kitchen Notes Board ────────────────────────────────────────── */
 
 .kitchen-notes-board {
   background: #16213e;
@@ -429,7 +300,7 @@ header h1 {
   color: #e94560;
 }
 
-/* ── Task E: Connection Badge ───────────────────────────────────────────── */
+/* ── Task C: Connection Badge ───────────────────────────────────────────── */
 
 .conn-badge {
   padding: 5px 12px;
