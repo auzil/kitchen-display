@@ -20,6 +20,10 @@ let nextId = 1;
 let activities = [];
 let nextActivityId = 1;
 
+// Kitchen notes store
+let kitchenNotes = [];
+let nextNoteId = 1;
+
 const activityMessages = {
   created: (o) => `Order #${o.id} placed — Table ${o.table} (${o.items.join(', ')})`,
   preparing: (o) => `Order #${o.id} is now being prepared`,
@@ -38,18 +42,17 @@ function addActivity(type, order) {
   return activity;
 }
 
-
 function getEstimatedWait() {
   const pending = orders.filter((o) => o.status === 'pending');
   const pendingItemsCount = pending.reduce((acc, item) => {
-    return acc += item.items.length
-  }, 0)
+    return acc += item.items.length;
+  }, 0);
 
-  const preparing = orders.filter((o) => o.status === 'preparing')
+  const preparing = orders.filter((o) => o.status === 'preparing');
   const preparingItemsCount = preparing.reduce((acc, item) => {
-    return acc += item.items.length
-  }, 0)
-  
+    return acc += item.items.length;
+  }, 0);
+
   return pendingItemsCount * 5 + preparingItemsCount * 3;
 }
 
@@ -65,6 +68,7 @@ app.post('/api/orders', (req, res) => {
     items,
     table: table || 'N/A',
     status: 'pending',
+    priority: 'normal',
     createdAt: new Date().toISOString(),
   };
 
@@ -89,9 +93,60 @@ app.patch('/api/orders/:id/status', (req, res) => {
   res.json({ order });
 });
 
+// Task A: PATCH /api/orders/:id/priority
+app.patch('/api/orders/:id/priority', (req, res) => {
+  const order = orders.find((o) => o.id === Number(req.params.id));
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  const { priority } = req.body;
+  if (!priority || !['urgent', 'normal'].includes(priority)) {
+    return res.status(400).json({ error: 'priority must be "urgent" or "normal"' });
+  }
+  if (order.status === 'ready') {
+    return res.status(400).json({ error: 'Cannot reprioritize a completed order' });
+  }
+
+  // Idempotent: already at requested priority
+  order.priority = priority;
+  io.emit('order:priority', { order });
+  res.json({ order });
+});
+
+// Task B: POST /api/kitchen/notes
+app.post('/api/kitchen/notes', (req, res) => {
+  const { text } = req.body;
+  if (!text || typeof text !== 'string' || !text.trim()) {
+    return res.status(400).json({ error: 'text is required and must be a non-empty string' });
+  }
+  if (text.length > 500) {
+    return res.status(400).json({ error: 'text must be 500 characters or fewer' });
+  }
+
+  const note = {
+    id: nextNoteId++,
+    text: text.trim(),
+    createdAt: new Date().toISOString(),
+    author: 'Kitchen',
+  };
+  kitchenNotes.push(note);
+  io.emit('kitchen:note:added', { note });
+  res.status(201).json({ note });
+});
+
+// Task B: DELETE /api/kitchen/notes/:id
+app.delete('/api/kitchen/notes/:id', (req, res) => {
+  const noteId = Number(req.params.id);
+  const idx = kitchenNotes.findIndex((n) => n.id === noteId);
+  if (idx === -1) return res.status(404).json({ error: 'Note not found' });
+
+  kitchenNotes.splice(idx, 1);
+  io.emit('kitchen:note:removed', { noteId });
+  res.status(204).end();
+});
+
 // Socket.io: send current state on connect
 io.on('connection', (socket) => {
-  socket.emit('orders:init', { orders, estimatedWait: getEstimatedWait(), activities });
+  socket.emit('orders:init', { orders, estimatedWait: getEstimatedWait(), activities, kitchenNotes });
 });
 
 const PORT = process.env.PORT || 4001;
