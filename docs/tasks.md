@@ -1,35 +1,19 @@
-# Kitchen Display — Live Coding Interview Tasks
-
-This app is a restaurant kitchen display system used for fullstack Node.js developer interviews.
+# Kitchen Display — Tasks
 
 **Stack:** Express + Socket.io (backend) · React + Vite (frontend)
 **Order states:** `pending` → `preparing` → `ready`
 
 ---
 
-## Existing Tasks (already stubbed in `server.js`)
+## Task 0 — Send State on Connection
 
-| # | Task | Type |
-|---|------|------|
-| 1 | `getEstimatedWait()` — wait time estimation | Backend |
-| 2 | `addActivity()` + `activityMessages` — activity feed | Backend |
-| 3 | `POST /api/orders` — create order with validation | Backend |
-| 4 | `PATCH /api/orders/:id/status` — status transitions with 409 on invalid flow | Backend |
+Inside `io.on('connection')` in `server.js`, emit `orders:init` to the newly connected socket with the current server state: `orders`, `estimatedWait`, and `activities`.
 
 ---
 
-## New Fullstack Tasks
+## Task A — Order Priority / Urgent Bumping
 
-Each task touches **both** `server.js` and `client/src/App.jsx`.
-
----
-
-### Task A — Order Priority / Urgent Bumping
-
-**Difficulty:** Medium
-**Estimated time:** 25 min
-
-#### Backend (`server.js`)
+### Backend (`server.js`)
 
 1. Add `priority: 'normal'` to the order object created in `POST /api/orders`
 
@@ -37,277 +21,60 @@ Each task touches **both** `server.js` and `client/src/App.jsx`.
    - Body: `{ priority: 'urgent' | 'normal' }`
    - 404 if order not found
    - 400 if `priority` is missing or not one of the two allowed values
-   - 400 if `order.status === 'ready'` (can't reprioritize a finished order)
+   - 400 if `order.status === 'ready'`
    - Idempotent: if already at the requested priority, return 200 unchanged
    - Update `order.priority`
-   - Emit: `io.emit('order:priority', { order })`
+   - Emit: `order:priority` with `{ order }`
    - Respond: `200 { order }`
 
-#### Frontend (`App.jsx`)
+### Frontend (`App.jsx`)
 
-1. Handle new socket event:
-   ```js
-   socket.on('order:priority', (data) => {
-     setOrders((prev) => prev.map((o) => o.id === data.order.id ? data.order : o));
-   });
-   ```
-
-2. New function:
-   ```js
-   const togglePriority = async (id, currentPriority) => {
-     const next = currentPriority === 'urgent' ? 'normal' : 'urgent';
-     await fetch(`${API}/orders/${id}/priority`, {
-       method: 'PATCH',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ priority: next }),
-     });
-   };
-   ```
-
-3. In each column, sort before rendering so urgent orders float to the top:
-   ```js
-   const byPriority = (a, b) => (a.priority === 'urgent' ? 0 : 1) - (b.priority === 'urgent' ? 0 : 1);
-   const pending = orders.filter((o) => o.status === 'pending').sort(byPriority);
-   // same for preparing, ready
-   ```
-
-4. In `OrderCard`:
-   - Show `<span className="urgent-badge">URGENT</span>` when `order.priority === 'urgent'`
-   - Add toggle button: `"Mark Urgent"` / `"Clear Urgent"`
-   - Pass `onTogglePriority` prop from `App`
-
-#### What it tests
-- Dedicated focused endpoint vs. overloading existing one (separation of concerns)
-- Default field initialization retrofitted into existing creation logic
-- Derived sort — computed from state, not stored separately
-- Idempotency reasoning
-
-#### Discussion questions
-1. New event `order:priority` vs. reusing `order:updated` — trade-offs? When would you consolidate?
-2. Should `preparing` orders also be blocked from priority changes?
-3. Two staff members toggle the same order simultaneously — what inconsistency can arise without a database?
+1. Handle `order:priority` socket event — replace the updated order in state
+2. Add `togglePriority(id, currentPriority)` function — `PATCH` the priority endpoint
+3. Sort each column so urgent orders appear first
+4. In `OrderCard`: show an `URGENT` badge and a toggle button when `priority === 'urgent'`
 
 ---
 
-### Task B — Kitchen Broadcast Notes Board
+## Task B — Kitchen Broadcast Notes Board
 
-**Difficulty:** Medium
-**Estimated time:** 25 min
+### Backend (`server.js`)
 
-#### Backend (`server.js`)
-
-1. Add at module level (near `orders`):
-   ```js
-   let kitchenNotes = [];
-   let nextNoteId = 1;
-   ```
+1. Add `kitchenNotes` array and `nextNoteId` counter at module level
 
 2. New endpoint: `POST /api/kitchen/notes`
-   - Body: `{ text: string }`
    - 400 if `text` is missing, not a string, or empty after trim
    - 400 if `text.length > 500`
-   - Create: `{ id: nextNoteId++, text: text.trim(), createdAt: new Date().toISOString(), author: 'Kitchen' }`
-   - Push to `kitchenNotes`
-   - Emit: `io.emit('kitchen:note:added', { note })`
+   - Create note with `id`, `text`, `createdAt`, `author: 'Kitchen'`
+   - Emit: `kitchen:note:added` with `{ note }`
    - Respond: `201 { note }`
 
 3. New endpoint: `DELETE /api/kitchen/notes/:id`
    - 404 if note not found
-   - Remove from `kitchenNotes`
-   - Emit: `io.emit('kitchen:note:removed', { noteId: Number(req.params.id) })`
-   - Respond: **`204`** — no body, do not call `res.json()`
+   - Emit: `kitchen:note:removed` with `{ noteId }`
+   - Respond: `204` — no body
 
-4. Extend the `orders:init` socket emission:
-   ```js
-   socket.emit('orders:init', { orders, estimatedWait: getEstimatedWait(), activities, kitchenNotes });
-   ```
+4. Extend `orders:init` emission to also include `kitchenNotes`
 
-#### Frontend (`App.jsx`)
+### Frontend (`App.jsx`)
 
-1. New state:
-   ```js
-   const [kitchenNotes, setKitchenNotes] = useState([]);
-   ```
-
-2. Extend `orders:init` handler:
-   ```js
-   setKitchenNotes(data.kitchenNotes || []);
-   ```
-
-3. Handle new socket events:
-   ```js
-   socket.on('kitchen:note:added', ({ note }) => {
-     setKitchenNotes((prev) => [note, ...prev]); // prepend, newest first
-   });
-   socket.on('kitchen:note:removed', ({ noteId }) => {
-     setKitchenNotes((prev) => prev.filter((n) => n.id !== noteId));
-   });
-   ```
-
-4. New functions:
-   ```js
-   const postNote = async (text) => {
-     await fetch(`${API}/kitchen/notes`, {
-       method: 'POST',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ text }),
-     });
-   };
-   const deleteNote = async (id) => {
-     await fetch(`${API}/kitchen/notes/${id}`, { method: 'DELETE' });
-     // ⚠️ Do NOT call .json() — 204 has no body
-   };
-   ```
-
-5. New `KitchenNotesBoard` component (self-contained form state):
-   ```jsx
-   function KitchenNotesBoard({ notes, onPost, onDelete }) {
-     const [text, setText] = useState('');
-     const handleSubmit = (e) => {
-       e.preventDefault();
-       if (!text.trim()) return;
-       onPost(text.trim());
-       setText('');
-     };
-     return (
-       <div className="kitchen-notes-board">
-         <h2>Kitchen Board</h2>
-         <form className="kitchen-notes-form" onSubmit={handleSubmit}>
-           <textarea value={text} maxLength={500} onChange={(e) => setText(e.target.value)} placeholder="Post a note..." />
-           <button type="submit">Post</button>
-         </form>
-         <ul>
-           {notes.map((n) => (
-             <li key={n.id} className="kitchen-note-item">
-               <div className="kitchen-note-text">
-                 {n.text}
-                 <div className="kitchen-note-meta">{new Date(n.createdAt).toLocaleTimeString()}</div>
-               </div>
-               <button onClick={() => onDelete(n.id)}>✕</button>
-             </li>
-           ))}
-         </ul>
-       </div>
-     );
-   }
-   ```
-
-#### What it tests
-- Full CRUD on a secondary resource without polluting the order domain
-- Additive, backward-compatible extension of the `orders:init` payload
-- Two-direction socket state sync: prepend on add, filter on remove
-- **204 trap:** calling `.json()` on a no-body response throws — candidate must know not to
-- Self-contained form state inside a child component
-
-#### Discussion questions
-1. The `orders:init` payload grows with each new resource. What architectural pattern would you introduce to avoid an ever-growing init blob?
-2. `author: 'Kitchen'` is hardcoded — minimum changes to support named authors? How does the socket event design change?
-3. Manager wants notes persisted across server restarts but is fine losing orders. How do you add persistence for only notes without a full database?
+1. Add `kitchenNotes` state
+2. Extend `orders:init` handler to set `kitchenNotes`
+3. Handle `kitchen:note:added` (prepend) and `kitchen:note:removed` (filter) socket events
+4. Add `postNote(text)` and `deleteNote(id)` functions
+5. Add `KitchenNotesBoard` component with a form to post notes and a list to display/delete them
 
 ---
 
-### Task C — Reconnection State Recovery
+## Task C — Reconnection State Recovery
 
-**Difficulty:** Medium
-**Estimated time:** 20 min
+### Backend (`server.js`)
 
-#### Backend (`server.js`)
+No changes needed — the `io.on('connection')` handler (Task 0 + Task B) already handles recovery.
 
-The server already emits full state to every connecting socket. Ensure the `connection` handler sends the complete payload:
+### Frontend (`App.jsx`)
 
-```js
-io.on('connection', (socket) => {
-  socket.emit('orders:init', {
-    orders,
-    estimatedWait: getEstimatedWait(),
-    activities,
-    kitchenNotes, // already added in Task B
-  });
-});
-```
-
-No REST endpoint needed for recovery — the socket push is the source of truth.
-
-#### Frontend (`App.jsx`)
-
-1. New state — initialize from the **live** socket property, not a hardcoded value:
-   ```js
-   const [connected, setConnected] = useState(socket.connected);
-   ```
-
-2. Add to `useEffect` (alongside existing socket handlers):
-   ```js
-   // Server sends 'orders:init' on every connection, so the existing
-   // handler already restores full state on reconnect automatically.
-   socket.on('connect', () => setConnected(true));
-   socket.on('disconnect', () => setConnected(false));
-   ```
-   Clean up in the return:
-   ```js
-   socket.off('connect');
-   socket.off('disconnect');
-   ```
-
-3. The existing `orders:init` handler handles recovery — no separate REST call needed:
-   ```js
-   socket.on('orders:init', (data) => {
-     setOrders(data.orders);
-     setEstimatedWait(data.estimatedWait);
-     setActivities(data.activities || []);
-     setKitchenNotes(data.kitchenNotes || []);
-   });
-   ```
-
-4. Connection badge in the header:
-   ```jsx
-   <span className={`conn-badge ${connected ? 'live' : 'reconnecting'}`}>
-     {connected ? '● Live' : '● Reconnecting…'}
-   </span>
-   ```
-   CSS (add to `App.css`):
-   ```css
-   .conn-badge.live         { color: #2ecc71; }
-   .conn-badge.reconnecting { color: #f0a500; }
-   ```
-
-#### Key insight
-Because the server emits `orders:init` inside `io.on('connection')`, every reconnect automatically triggers a full state push — no explicit REST recovery call is needed on the client. The `connect` handler only needs to update the connection badge. This keeps recovery logic in one place (the server) rather than split across client REST calls and socket events.
-
-#### What it tests
-- Socket.io event lifecycle: `connect` fires on both first connect AND reconnect (Socket.io v3 removed the separate `reconnect` event)
-- Server-push as source of truth — understanding that `orders:init` on `connection` is already idempotent recovery
-- `useState(socket.connected)` — initializing from a live external property, not a hardcoded `false` (avoids flicker)
-- `useEffect` cleanup for non-React subscriptions
-- Recognizing that adding a REST fallback would duplicate recovery logic unnecessarily
-
-#### Discussion questions
-1. Socket.io v3 removed the `reconnect` event — `connect` fires on both first connection and reconnects. How would you distinguish them if you needed to run different logic for each?
-2. Server goes down for 30 seconds; 20 orders are created by another terminal via REST. Walk through exactly what happens on this client when the socket reconnects.
-3. User had a multi-select open when the reconnect happens. `orders:init` replaces all state. How would you preserve ephemeral UI state across the state refresh?
-4. The server-push approach means recovery only works while the socket is available. When would a REST fallback still be valuable despite the duplication?
-
----
-
-## Suggested Session Plans
-
-| Session | Tasks | Focus |
-|---------|-------|-------|
-| Balanced senior | A → B | Priority + notes board |
-| Full assessment | A + B + C | Priority, kitchen board, reconnection |
-| Warm-up first | C → A | Reliability thinking, then UX feature |
-
----
-
-## Evaluation Dimensions
-
-| Skill | Tasks |
-|-------|-------|
-| Express routing & HTTP status codes | A, B, C |
-| In-memory data manipulation | A, B, C |
-| Socket.io event design | A, B, C |
-| React `useState` / `useEffect` patterns | A, B, C |
-| Local vs. global component state | B |
-| 204 / no-body response handling | B |
-| Custom hook / component decomposition | A, B |
-| Real-time reliability & REST fallback | C |
-| Idempotency reasoning | A, C |
+1. Add `connected` state, initialized from `socket.connected`
+2. Listen to `connect` / `disconnect` socket events to update `connected` state; clean up in `useEffect` return
+3. The existing `orders:init` handler already restores full state on reconnect — no extra REST call needed
+4. Show a connection badge in the header: `● Live` (green) or `● Reconnecting…` (amber)

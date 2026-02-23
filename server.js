@@ -116,10 +116,10 @@ app.patch('/api/orders/:id/status', (req, res) => {
 // - Emit: io.emit('kitchen:note:removed', { noteId: Number(req.params.id) })
 // - Respond: 204 — no body, do not call res.json()
 
-// Socket.io: send current state on connect
-// Task B: extend the payload to also include kitchenNotes
+// Task: Socket.io — on every new connection, emit 'orders:init' with current state
+// socket.emit('orders:init', { orders, estimatedWait: getEstimatedWait(), activities });
 io.on('connection', (socket) => {
-  socket.emit('orders:init', { orders, estimatedWait: getEstimatedWait(), activities });
+  // TODO: emit 'orders:init' with { orders, estimatedWait, activities }
 });
 
 const PORT = process.env.PORT || 4001;
