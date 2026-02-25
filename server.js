@@ -1,16 +1,24 @@
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
-const { Server } = require('socket.io');
+const { WebSocketServer } = require('ws');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*' },
-});
+const wss = new WebSocketServer({ server, path: '/ws' });
+
+// Broadcast a named event to all connected clients
+function broadcast(event, data) {
+  const msg = JSON.stringify({ event, data });
+  for (const client of wss.clients) {
+    if (client.readyState === client.OPEN) {
+      client.send(msg);
+    }
+  }
+}
 
 // In-memory order store
 let orders = [];
@@ -74,7 +82,7 @@ app.post('/api/orders', (req, res) => {
 
   orders.push(order);
   const createdActivity = addActivity('created', order);
-  io.emit('order:created', { order, estimatedWait: getEstimatedWait(), activity: createdActivity });
+  broadcast('order:created', { order, estimatedWait: getEstimatedWait(), activity: createdActivity });
   res.status(201).json({ order, estimatedWait: getEstimatedWait() });
 });
 
@@ -89,7 +97,7 @@ app.patch('/api/orders/:id/status', (req, res) => {
 
   order.status = next;
   const updatedActivity = addActivity(next, order);
-  io.emit('order:updated', { order, estimatedWait: getEstimatedWait(), activity: updatedActivity });
+  broadcast('order:updated', { order, estimatedWait: getEstimatedWait(), activity: updatedActivity });
   res.json({ order });
 });
 
@@ -99,7 +107,7 @@ app.patch('/api/orders/:id/status', (req, res) => {
 // - 400 if order.status === 'ready' (can't reprioritize a finished order)
 // - Idempotent: if already at the requested priority, return 200 unchanged
 // - Update order.priority
-// - Emit: io.emit('order:priority', { order })
+// - Emit: broadcast('order:priority', { order })
 // - Respond: 200 { order }
 
 // Task B: POST /api/kitchen/notes
@@ -107,18 +115,18 @@ app.patch('/api/orders/:id/status', (req, res) => {
 // - 400 if text.length > 500
 // - Create: { id: nextNoteId++, text: text.trim(), createdAt: new Date().toISOString(), author: 'Kitchen' }
 // - Push to kitchenNotes
-// - Emit: io.emit('kitchen:note:added', { note })
+// - Emit: broadcast('kitchen:note:added', { note })
 // - Respond: 201 { note }
 
 // Task B: DELETE /api/kitchen/notes/:id
 // - 404 if note not found
 // - Remove from kitchenNotes
-// - Emit: io.emit('kitchen:note:removed', { noteId: Number(req.params.id) })
+// - Emit: broadcast('kitchen:note:removed', { noteId: Number(req.params.id) })
 // - Respond: 204 — no body, do not call res.json()
 
-// Task: Socket.io — on every new connection, emit 'orders:init' with current state
-io.on('connection', (socket) => {
-  // Task 0: emit 'orders:init' with { orders, estimatedWait, activities }
+// Task 0: on every new connection, send 'orders:init' with current state
+wss.on('connection', (ws) => {
+  // Task 0: send 'orders:init' with { orders, estimatedWait, activities }
 });
 
 const PORT = process.env.PORT || 4001;

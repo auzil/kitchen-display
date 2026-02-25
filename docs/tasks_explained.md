@@ -2,7 +2,7 @@
 
 This app is a restaurant kitchen display system used for fullstack Node.js developer interviews.
 
-**Stack:** Express + Socket.io (backend) · React + Vite (frontend)
+**Stack:** Express + ws (backend) · React + Vite (frontend)
 **Order states:** `pending` → `preparing` → `ready`
 
 ---
@@ -17,7 +17,7 @@ This app is a restaurant kitchen display system used for fullstack Node.js devel
 | 2 | `addActivity(type, order)` + `activityMessages` map — activity feed entries |
 | 3 | `POST /api/orders` — validates `items`, creates order (`id`, `items`, `table`, `status: 'pending'`, `createdAt`), emits `order:created` |
 | 4 | `PATCH /api/orders/:id/status` — transitions `pending → preparing → ready`, returns **400** if already completed, emits `order:updated` |
-| 5 | ~~`io.on('connection')` — emits `orders:init` with `{ orders, estimatedWait, activities }` on socket connect~~ |
+| 5 | ~~`wss.on('connection')` — sends `orders:init` with `{ orders, estimatedWait, activities }` on WebSocket connect~~ |
 
 ### Frontend (`App.jsx`)
 
@@ -26,9 +26,9 @@ This app is a restaurant kitchen display system used for fullstack Node.js devel
 | 1 | `OrderCard` component — shows order id, table, items, time, advance button |
 | 2 | `OrderForm` component — comma-separated items input, table input, POST on submit |
 | 3 | `ActivityFeed` component — reverse-chronological activity list |
-| 4 | `orders:init` socket handler — sets orders, estimatedWait, activities |
-| 5 | `order:created` socket handler — appends new order and activity |
-| 6 | `order:updated` socket handler — replaces updated order and appends activity |
+| 4 | `orders:init` WebSocket message handler — sets orders, estimatedWait, activities |
+| 5 | `order:created` WebSocket message handler — appends new order and activity |
+| 6 | `order:updated` WebSocket message handler — replaces updated order and appends activity |
 | 7 | `createOrder` — `POST /api/orders` |
 | 8 | `advanceOrder` — `PATCH /api/orders/:id/status` |
 
@@ -47,16 +47,16 @@ Each task touches **both** `server.js` and `client/src/App.jsx`. Stubs and `// T
 
 #### Backend (`server.js`)
 
-Inside `io.on('connection')`, emit `orders:init` to the newly connected socket with the current server state:
+Inside `wss.on('connection')`, send `orders:init` to the newly connected client with the current server state:
 
 ```js
-io.on('connection', (socket) => {
-  socket.emit('orders:init', { orders, estimatedWait: getEstimatedWait(), activities });
+wss.on('connection', (ws) => {
+  ws.send(JSON.stringify({ event: 'orders:init', data: { orders, estimatedWait: getEstimatedWait(), activities } }));
 });
 ```
 
 #### What it tests
-- Understanding of `socket.emit` (to one client) vs `io.emit` (to all)
+- Understanding of `ws.send` (to one client) vs `broadcast` (to all)
 - Knowing that `orders:init` must fire on every new connection so late-joining clients get current state
 
 ---
@@ -77,16 +77,16 @@ io.on('connection', (socket) => {
    - 400 if `order.status === 'ready'` (can't reprioritize a finished order)
    - Idempotent: if already at the requested priority, return 200 unchanged
    - Update `order.priority`
-   - Emit: `io.emit('order:priority', { order })`
+   - Emit: `broadcast('order:priority', { order })`
    - Respond: `200 { order }`
 
 #### Frontend (`App.jsx`)
 
-1. Handle new socket event:
+1. Handle new WebSocket message in `ws.onmessage`:
    ```js
-   socket.on('order:priority', (data) => {
+   } else if (name === 'order:priority') {
      setOrders((prev) => prev.map((o) => o.id === data.order.id ? data.order : o));
-   });
+   }
    ```
 
 2. New function:
@@ -145,18 +145,18 @@ io.on('connection', (socket) => {
    - 400 if `text.length > 500`
    - Create: `{ id: nextNoteId++, text: text.trim(), createdAt: new Date().toISOString(), author: 'Kitchen' }`
    - Push to `kitchenNotes`
-   - Emit: `io.emit('kitchen:note:added', { note })`
+   - Emit: `broadcast('kitchen:note:added', { note })`
    - Respond: `201 { note }`
 
 3. New endpoint: `DELETE /api/kitchen/notes/:id`
    - 404 if note not found
    - Remove from `kitchenNotes`
-   - Emit: `io.emit('kitchen:note:removed', { noteId: Number(req.params.id) })`
+   - Emit: `broadcast('kitchen:note:removed', { noteId: Number(req.params.id) })`
    - Respond: **`204`** — no body, do not call `res.json()`
 
-4. Extend the `orders:init` socket emission:
+4. Extend the `orders:init` send:
    ```js
-   socket.emit('orders:init', { orders, estimatedWait: getEstimatedWait(), activities, kitchenNotes });
+   ws.send(JSON.stringify({ event: 'orders:init', data: { orders, estimatedWait: getEstimatedWait(), activities, kitchenNotes } }));
    ```
 
 #### Frontend (`App.jsx`)
@@ -171,14 +171,13 @@ io.on('connection', (socket) => {
    setKitchenNotes(data.kitchenNotes || []);
    ```
 
-3. Handle new socket events:
+3. Handle new WebSocket messages in `ws.onmessage`:
    ```js
-   socket.on('kitchen:note:added', ({ note }) => {
-     setKitchenNotes((prev) => [note, ...prev]); // prepend, newest first
-   });
-   socket.on('kitchen:note:removed', ({ noteId }) => {
-     setKitchenNotes((prev) => prev.filter((n) => n.id !== noteId));
-   });
+   } else if (name === 'kitchen:note:added') {
+     setKitchenNotes((prev) => [data.note, ...prev]); // prepend, newest first
+   } else if (name === 'kitchen:note:removed') {
+     setKitchenNotes((prev) => prev.filter((n) => n.id !== data.noteId));
+   }
    ```
 
 4. New functions:
@@ -250,49 +249,48 @@ io.on('connection', (socket) => {
 
 #### Backend (`server.js`)
 
-No changes needed beyond what Task B already adds. The `io.on('connection')` handler already emits `orders:init`; after Task B extends it with `kitchenNotes`, the payload is complete:
+No changes needed beyond what Task B already adds. The `wss.on('connection')` handler already sends `orders:init`; after Task B extends it with `kitchenNotes`, the payload is complete:
 
 ```js
-io.on('connection', (socket) => {
-  socket.emit('orders:init', {
-    orders,
-    estimatedWait: getEstimatedWait(),
-    activities,
-    kitchenNotes, // added in Task B
-  });
+wss.on('connection', (ws) => {
+  ws.send(JSON.stringify({
+    event: 'orders:init',
+    data: {
+      orders,
+      estimatedWait: getEstimatedWait(),
+      activities,
+      kitchenNotes, // added in Task B
+    },
+  }));
 });
 ```
 
-No REST endpoint needed for recovery — the socket push is the source of truth.
+No REST endpoint needed for recovery — the WebSocket push is the source of truth.
 
 #### Frontend (`App.jsx`)
 
-1. New state — initialize from the **live** socket property, not a hardcoded value:
+1. New state — initialize from the **live** WebSocket property, not a hardcoded value:
    ```js
-   const [connected, setConnected] = useState(socket.connected);
+   const [connected, setConnected] = useState(ws.readyState === WebSocket.OPEN);
    ```
 
-2. Add to `useEffect` (alongside existing socket handlers):
+2. Add to `useEffect` (alongside existing WebSocket handlers):
    ```js
    // Server sends 'orders:init' on every connection, so the existing
    // handler already restores full state on reconnect automatically.
-   socket.on('connect', () => setConnected(true));
-   socket.on('disconnect', () => setConnected(false));
+   ws.onopen = () => setConnected(true);
+   ws.onclose = () => setConnected(false);
    ```
-   Clean up in the return:
-   ```js
-   socket.off('connect');
-   socket.off('disconnect');
-   ```
+   The existing cleanup (`return () => ws.close()`) handles teardown.
 
 3. The existing `orders:init` handler (already in `App.jsx`, extended in Task B) handles recovery automatically — no separate REST call needed:
    ```js
-   socket.on('orders:init', (data) => {
+   if (name === 'orders:init') {
      setOrders(data.orders);
      setEstimatedWait(data.estimatedWait);
      setActivities(data.activities || []);
      setKitchenNotes(data.kitchenNotes || []); // from Task B
-   });
+   }
    ```
 
 4. Connection badge in the header:
@@ -308,20 +306,20 @@ No REST endpoint needed for recovery — the socket push is the source of truth.
    ```
 
 #### Key insight
-Because the server emits `orders:init` inside `io.on('connection')`, every reconnect automatically triggers a full state push — no explicit REST recovery call is needed on the client. The `connect` handler only needs to update the connection badge. This keeps recovery logic in one place (the server) rather than split across client REST calls and socket events.
+Because the server sends `orders:init` inside `wss.on('connection')`, every reconnect automatically triggers a full state push — no explicit REST recovery call is needed on the client. `ws.onopen` only needs to update the connection badge. This keeps recovery logic in one place (the server) rather than split across client REST calls and WebSocket events.
 
 #### What it tests
-- Socket.io event lifecycle: `connect` fires on both first connect AND reconnect (Socket.io v3 removed the separate `reconnect` event)
+- Native WebSocket lifecycle: `onopen` fires on both first connect AND reconnect
 - Server-push as source of truth — understanding that `orders:init` on `connection` is already idempotent recovery
-- `useState(socket.connected)` — initializing from a live external property, not a hardcoded `false` (avoids flicker)
+- `useState(ws.readyState === WebSocket.OPEN)` — initializing from a live external property, not a hardcoded `false` (avoids flicker)
 - `useEffect` cleanup for non-React subscriptions
 - Recognizing that adding a REST fallback would duplicate recovery logic unnecessarily
 
 #### Discussion questions
-1. Socket.io v3 removed the `reconnect` event — `connect` fires on both first connection and reconnects. How would you distinguish them if you needed to run different logic for each?
-2. Server goes down for 30 seconds; 20 orders are created by another terminal via REST. Walk through exactly what happens on this client when the socket reconnects.
+1. Native WebSocket does not auto-reconnect — how would you implement reconnection logic (e.g., exponential back-off) without a library like Socket.io?
+2. Server goes down for 30 seconds; 20 orders are created by another terminal via REST. Walk through exactly what happens on this client when the WebSocket reconnects.
 3. User had a multi-select open when the reconnect happens. `orders:init` replaces all state. How would you preserve ephemeral UI state across the state refresh?
-4. The server-push approach means recovery only works while the socket is available. When would a REST fallback still be valuable despite the duplication?
+4. The server-push approach means recovery only works while the WebSocket is available. When would a REST fallback still be valuable despite the duplication?
 
 ---
 
@@ -341,7 +339,7 @@ Because the server emits `orders:init` inside `io.on('connection')`, every recon
 |-------|-------|
 | Express routing & HTTP status codes | A, B, C |
 | In-memory data manipulation | A, B, C |
-| Socket.io event design | A, B, C |
+| WebSocket event design | A, B, C |
 | React `useState` / `useEffect` patterns | A, B, C |
 | Local vs. global component state | B |
 | 204 / no-body response handling | B |
