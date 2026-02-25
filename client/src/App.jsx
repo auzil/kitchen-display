@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { io } from 'socket.io-client';
+import { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 const API = '/api';
-const socket = io();
+const WS_URL = `ws://${window.location.host}/ws`;
 
 // ---------------------------------------------------------------------------
 // OrderCard
@@ -33,8 +32,6 @@ function OrderCard({ order, onAdvance }) {
           {nextLabel[order.status]}
         </button>
       )}
-
-      {/* Task A: add urgent badge and priority toggle button */}
     </div>
   );
 }
@@ -94,8 +91,6 @@ function ActivityFeed({ activities }) {
   );
 }
 
-// Task B: add KitchenNotesBoard component here
-
 // ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
@@ -103,45 +98,37 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [estimatedWait, setEstimatedWait] = useState(0);
   const [activities, setActivities] = useState([]);
-  // Task B: add kitchenNotes state
-  // Task C: add connected state (initialize from socket.connected)
+  const wsRef = useRef(null);
 
   useEffect(() => {
-    socket.on('orders:init', (data) => {
-      setOrders(data.orders);
-      setEstimatedWait(data.estimatedWait);
-      setActivities(data.activities || []);
-      // Task B: also set kitchenNotes from data
-    });
+    const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
 
-    socket.on('order:created', (data) => {
-      setOrders((prev) => [...prev, data.order]);
-      setEstimatedWait(data.estimatedWait);
-      if (data.activity) setActivities((prev) => [...prev, data.activity]);
-    });
+    ws.onmessage = (event) => {
+      const { event: name, data } = JSON.parse(event.data);
 
-    socket.on('order:updated', (data) => {
-      setOrders((prev) =>
-        prev.map((o) => (o.id === data.order.id ? data.order : o))
-      );
-      setEstimatedWait(data.estimatedWait);
-      if (data.activity) setActivities((prev) => [...prev, data.activity]);
-    });
-
-    // Task A: handle 'order:priority' socket event
-
-    // Task B: handle 'kitchen:note:added' and 'kitchen:note:removed' socket events
-
-    // Task C: handle 'connect' and 'disconnect' socket events
-
-    return () => {
-      socket.off('orders:init');
-      socket.off('order:created');
-      socket.off('order:updated');
-      // Task A: socket.off('order:priority')
-      // Task B: socket.off('kitchen:note:added') / socket.off('kitchen:note:removed')
-      // Task C: socket.off('connect') / socket.off('disconnect')
+      if (name === 'orders:init') {
+        setOrders(data.orders);
+        setEstimatedWait(data.estimatedWait);
+        setActivities(data.activities || []);
+      } else if (name === 'order:created') {
+        setOrders((prev) => [...prev, data.order]);
+        setEstimatedWait(data.estimatedWait);
+        if (data.activity) setActivities((prev) => [...prev, data.activity]);
+      } else if (name === 'order:updated') {
+        setOrders((prev) =>
+          prev.map((o) => (o.id === data.order.id ? data.order : o))
+        );
+        setEstimatedWait(data.estimatedWait);
+        if (data.activity) setActivities((prev) => [...prev, data.activity]);
+      } else if (name === 'order:priority') {
+        setOrders((prev) =>
+          prev.map((o) => (o.id === data.order.id ? data.order : o))
+        );
+      }
     };
+
+    return () => ws.close();
   }, []);
 
   const createOrder = async (data) => {
@@ -156,59 +143,37 @@ export default function App() {
     await fetch(`${API}/orders/${id}/status`, { method: 'PATCH' });
   };
 
-  // Task A: add togglePriority function
-
-  // Task B: add postNote and deleteNote functions
-
   const pending = orders.filter((o) => o.status === 'pending');
   const preparing = orders.filter((o) => o.status === 'preparing');
-  // Task A: sort pending and preparing by priority (urgent first)
   const ready = orders.filter((o) => o.status === 'ready');
 
   return (
     <div className="app">
       <header>
         <h1>Kitchen Display</h1>
-        {/* Task C: add connection badge */}
         <span className="wait-badge">Est. wait: {estimatedWait} min</span>
       </header>
 
       <OrderForm onSubmit={createOrder} />
       <ActivityFeed activities={activities} />
 
-      {/* Task B: render KitchenNotesBoard here */}
-
       <div className="columns">
         <div className="column pending">
           <h2>Pending ({pending.length})</h2>
           {pending.map((o) => (
-            // Task A: also pass onTogglePriority={togglePriority}
-            <OrderCard
-              key={o.id}
-              order={o}
-              onAdvance={advanceOrder}
-            />
+            <OrderCard key={o.id} order={o} onAdvance={advanceOrder} />
           ))}
         </div>
         <div className="column preparing">
           <h2>Preparing ({preparing.length})</h2>
           {preparing.map((o) => (
-            // Task A: also pass onTogglePriority={togglePriority}
-            <OrderCard
-              key={o.id}
-              order={o}
-              onAdvance={advanceOrder}
-            />
+            <OrderCard key={o.id} order={o} onAdvance={advanceOrder} />
           ))}
         </div>
         <div className="column ready">
           <h2>Ready ({ready.length})</h2>
           {ready.map((o) => (
-            <OrderCard
-              key={o.id}
-              order={o}
-              onAdvance={advanceOrder}
-            />
+            <OrderCard key={o.id} order={o} onAdvance={advanceOrder} />
           ))}
         </div>
       </div>

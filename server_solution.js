@@ -1,16 +1,24 @@
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
-const { Server } = require('socket.io');
+const { WebSocketServer } = require('ws');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*' },
-});
+const wss = new WebSocketServer({ server, path: '/ws' });
+
+// Broadcast a named event to all connected clients
+function broadcast(event, data) {
+  const msg = JSON.stringify({ event, data });
+  for (const client of wss.clients) {
+    if (client.readyState === client.OPEN) {
+      client.send(msg);
+    }
+  }
+}
 
 // In-memory order store
 let orders = [];
@@ -44,14 +52,10 @@ function addActivity(type, order) {
 
 function getEstimatedWait() {
   const pending = orders.filter((o) => o.status === 'pending');
-  const pendingItemsCount = pending.reduce((acc, item) => {
-    return acc += item.items.length;
-  }, 0);
+  const pendingItemsCount = pending.reduce((acc, item) => acc + item.items.length, 0);
 
   const preparing = orders.filter((o) => o.status === 'preparing');
-  const preparingItemsCount = preparing.reduce((acc, item) => {
-    return acc += item.items.length;
-  }, 0);
+  const preparingItemsCount = preparing.reduce((acc, item) => acc + item.items.length, 0);
 
   return pendingItemsCount * 5 + preparingItemsCount * 3;
 }
@@ -74,7 +78,7 @@ app.post('/api/orders', (req, res) => {
 
   orders.push(order);
   const createdActivity = addActivity('created', order);
-  io.emit('order:created', { order, estimatedWait: getEstimatedWait(), activity: createdActivity });
+  broadcast('order:created', { order, estimatedWait: getEstimatedWait(), activity: createdActivity });
   res.status(201).json({ order, estimatedWait: getEstimatedWait() });
 });
 
@@ -89,11 +93,11 @@ app.patch('/api/orders/:id/status', (req, res) => {
 
   order.status = next;
   const updatedActivity = addActivity(next, order);
-  io.emit('order:updated', { order, estimatedWait: getEstimatedWait(), activity: updatedActivity });
+  broadcast('order:updated', { order, estimatedWait: getEstimatedWait(), activity: updatedActivity });
   res.json({ order });
 });
 
-// Task A: PATCH /api/orders/:id/priority
+// PATCH /api/orders/:id/priority
 app.patch('/api/orders/:id/priority', (req, res) => {
   const order = orders.find((o) => o.id === Number(req.params.id));
   if (!order) return res.status(404).json({ error: 'Order not found' });
@@ -106,13 +110,12 @@ app.patch('/api/orders/:id/priority', (req, res) => {
     return res.status(400).json({ error: 'Cannot reprioritize a completed order' });
   }
 
-  // Idempotent: already at requested priority
   order.priority = priority;
-  io.emit('order:priority', { order });
+  broadcast('order:priority', { order });
   res.json({ order });
 });
 
-// Task B: POST /api/kitchen/notes
+// POST /api/kitchen/notes
 app.post('/api/kitchen/notes', (req, res) => {
   const { text } = req.body;
   if (!text || typeof text !== 'string' || !text.trim()) {
@@ -129,24 +132,27 @@ app.post('/api/kitchen/notes', (req, res) => {
     author: 'Kitchen',
   };
   kitchenNotes.push(note);
-  io.emit('kitchen:note:added', { note });
+  broadcast('kitchen:note:added', { note });
   res.status(201).json({ note });
 });
 
-// Task B: DELETE /api/kitchen/notes/:id
+// DELETE /api/kitchen/notes/:id
 app.delete('/api/kitchen/notes/:id', (req, res) => {
   const noteId = Number(req.params.id);
   const idx = kitchenNotes.findIndex((n) => n.id === noteId);
   if (idx === -1) return res.status(404).json({ error: 'Note not found' });
 
   kitchenNotes.splice(idx, 1);
-  io.emit('kitchen:note:removed', { noteId });
+  broadcast('kitchen:note:removed', { noteId });
   res.status(204).end();
 });
 
-// Socket.io: send current state on connect
-io.on('connection', (socket) => {
-  socket.emit('orders:init', { orders, estimatedWait: getEstimatedWait(), activities, kitchenNotes });
+// WebSocket: send current state on connect
+wss.on('connection', (ws) => {
+  ws.send(JSON.stringify({
+    event: 'orders:init',
+    data: { orders, estimatedWait: getEstimatedWait(), activities, kitchenNotes },
+  }));
 });
 
 const PORT = process.env.PORT || 4001;

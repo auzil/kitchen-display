@@ -1,6 +1,6 @@
 # Kitchen Display — Live Coding Exercise
 
-A fullstack restaurant kitchen display built with **Express + Socket.io** (backend) and **React + Vite** (frontend).
+A fullstack restaurant kitchen display built with **Express + ws** (backend) and **React + Vite** (frontend).
 
 Your job is to implement the tasks below inside **`server.js`** and **`client/src/App.jsx`**.
 `// Task X:` comments are already placed in both files to guide you.
@@ -60,7 +60,7 @@ Server: **http://localhost:4001** · Client: **http://localhost:5173**
 
 **Difficulty:** Easy · **Files:** `server.js`
 
-Inside `io.on('connection')`, emit `orders:init` to the newly connected socket with the current server state.
+Inside `wss.on('connection')`, send `orders:init` to the newly connected WebSocket client with the current server state.
 
 **Payload:**
 
@@ -89,12 +89,12 @@ Inside `io.on('connection')`, emit `orders:init` to the newly connected socket w
    | 400 | `priority` missing or not one of the two allowed values |
    | 400 | `order.status === 'ready'` — can't reprioritize a finished order |
    | Idempotent | if already at the requested priority, return `200` unchanged |
-   | Emit | `io.emit('order:priority', { order })` |
+   | Emit | `broadcast('order:priority', { order })` |
    | Response | `200 { order }` |
 
 #### Frontend
 
-1. Handle `order:priority` socket event — replace the updated order in state.
+1. Handle `order:priority` WebSocket message — replace the updated order in state.
 2. Add `togglePriority(id, currentPriority)` — PATCHes the priority endpoint, toggling between `'urgent'` and `'normal'`.
 3. Sort each column so urgent orders appear first.
 4. In `OrderCard`: show an `URGENT` badge and a toggle button when `priority === 'urgent'`.
@@ -117,7 +117,7 @@ Inside `io.on('connection')`, emit `orders:init` to the newly connected socket w
    | 400 | `text` missing, not a string, or empty after trim |
    | 400 | `text.length > 500` |
    | Create | `{ id: nextNoteId++, text: text.trim(), createdAt: new Date().toISOString(), author: 'Kitchen' }` |
-   | Emit | `io.emit('kitchen:note:added', { note })` |
+   | Emit | `broadcast('kitchen:note:added', { note })` |
    | Response | `201 { note }` |
 
 3. New endpoint: `DELETE /api/kitchen/notes/:id`
@@ -125,7 +125,7 @@ Inside `io.on('connection')`, emit `orders:init` to the newly connected socket w
    | Rule | Detail |
    |------|--------|
    | 404 | note not found |
-   | Emit | `io.emit('kitchen:note:removed', { noteId: Number(req.params.id) })` |
+   | Emit | `broadcast('kitchen:note:removed', { noteId: Number(req.params.id) })` |
    | Response | `204` — **no body**, do not call `res.json()` |
 
 4. Extend `orders:init` to also include `kitchenNotes` in the payload.
@@ -134,7 +134,7 @@ Inside `io.on('connection')`, emit `orders:init` to the newly connected socket w
 
 1. Add `kitchenNotes` state.
 2. Extend `orders:init` handler to set `kitchenNotes`.
-3. Handle `kitchen:note:added` (prepend) and `kitchen:note:removed` (filter) socket events.
+3. Handle `kitchen:note:added` (prepend) and `kitchen:note:removed` (filter) WebSocket messages.
 4. Add `postNote(text)` and `deleteNote(id)` functions.
 5. Add a `KitchenNotesBoard` component with a form to post notes and a list to display/delete them.
 
@@ -146,12 +146,12 @@ Inside `io.on('connection')`, emit `orders:init` to the newly connected socket w
 
 **Difficulty:** Medium · **Files:** `App.jsx` only
 
-No backend changes needed — `io.on('connection')` already emits `orders:init`, so every reconnect automatically triggers a full state push.
+No backend changes needed — `wss.on('connection')` already sends `orders:init`, so every reconnect automatically triggers a full state push.
 
 #### Frontend
 
-1. Add `connected` state, initialized from `socket.connected` (not hardcoded `false`).
-2. Inside `useEffect`, handle `connect` / `disconnect` socket events to update `connected`; clean up in the return function.
+1. Add `connected` state, initialized from `ws.readyState === WebSocket.OPEN` (not hardcoded `false`).
+2. Inside `useEffect`, handle `ws.onopen` / `ws.onclose` to update `connected`; the existing cleanup (`ws.close()`) handles teardown.
 3. The existing `orders:init` handler already restores full state on reconnect — no REST call needed.
 4. Show a connection badge in the header:
 
@@ -202,7 +202,9 @@ No backend changes needed — `io.on('connection')` already emits `orders:init`,
 
 ---
 
-## Socket events
+## WebSocket events
+
+Messages are JSON-encoded as `{ event, data }`. The client reads them via `ws.onmessage` and the server sends them via `broadcast(event, data)`.
 
 | Event | Direction | Payload |
 |-------|-----------|---------|
