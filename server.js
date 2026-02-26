@@ -28,9 +28,8 @@ let nextId = 1;
 let activities = [];
 let nextActivityId = 1;
 
-// Task B: add kitchenNotes store here
-// let kitchenNotes = [];
-// let nextNoteId = 1;
+let kitchenNotes = [];
+let nextNoteId = 1;
 
 const activityMessages = {
   created: (o) => `Order #${o.id} placed — Table ${o.table} (${o.items.join(', ')})`,
@@ -111,22 +110,42 @@ app.patch('/api/orders/:id/status', (req, res) => {
 // - Respond: 200 { order }
 
 // Task B: POST /api/kitchen/notes
-// - 400 if text is missing, not a string, or empty after trim
-// - 400 if text.length > 500
-// - Create: { id: nextNoteId++, text: text.trim(), createdAt: new Date().toISOString(), author: 'Kitchen' }
-// - Push to kitchenNotes
-// - Emit: broadcast('kitchen:note:added', { note })
-// - Respond: 201 { note }
+app.post('/api/kitchen/notes', (req, res) => {
+  const { text } = req.body;
+  if (!text || typeof text !== 'string' || !text.trim()) {
+    return res.status(400).json({ error: 'Text is required' });
+  }
+  if (text.length > 500) {
+    return res.status(400).json({ error: 'Text must be 500 characters or fewer' });
+  }
+  const note = {
+    id: nextNoteId++,
+    text: text.trim(),
+    createdAt: new Date().toISOString(),
+    author: 'Kitchen',
+  };
+  kitchenNotes.push(note);
+  broadcast('kitchen:note:added', { note });
+  res.status(201).json({ note });
+});
 
 // Task B: DELETE /api/kitchen/notes/:id
-// - 404 if note not found
-// - Remove from kitchenNotes
-// - Emit: broadcast('kitchen:note:removed', { noteId: Number(req.params.id) })
-// - Respond: 204 — no body, do not call res.json()
+app.delete('/api/kitchen/notes/:id', (req, res) => {
+  const noteId = Number(req.params.id);
+  const index = kitchenNotes.findIndex((n) => n.id === noteId);
+  if (index === -1) return res.status(404).json({ error: 'Note not found' });
+  kitchenNotes.splice(index, 1);
+  broadcast('kitchen:note:removed', { noteId });
+  res.status(204).end();
+});
 
 // Task 0: on every new connection, send 'orders:init' with current state
 wss.on('connection', (ws) => {
   // Task 0: send 'orders:init' with { orders, estimatedWait, activities }
+  ws.send(JSON.stringify({
+    event: 'orders:init',
+    data: { orders, estimatedWait: getEstimatedWait(), activities, kitchenNotes },
+  }));
 });
 
 const PORT = process.env.PORT || 4001;

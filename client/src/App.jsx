@@ -73,6 +73,48 @@ function OrderForm({ onSubmit }) {
 }
 
 // ---------------------------------------------------------------------------
+// KitchenNotesBoard
+// ---------------------------------------------------------------------------
+function KitchenNotesBoard({ notes, onPost, onDelete }) {
+  const [text, setText] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    onPost(text);
+    setText('');
+  };
+
+  return (
+    <div className="kitchen-notes-board">
+      <h2>Kitchen Notes</h2>
+      <form className="kitchen-notes-form" onSubmit={handleSubmit}>
+        <textarea
+          placeholder="Broadcast a note to the kitchen…"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          maxLength={500}
+        />
+        <button type="submit">Post</button>
+      </form>
+      <div>
+        {notes.map((note) => (
+          <div key={note.id} className="kitchen-note-item">
+            <div className="kitchen-note-text">
+              {note.text}
+              <div className="kitchen-note-meta">
+                {note.author} · {new Date(note.createdAt).toLocaleTimeString()}
+              </div>
+            </div>
+            <button onClick={() => onDelete(note.id)}>✕</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // ActivityFeed
 // ---------------------------------------------------------------------------
 function ActivityFeed({ activities }) {
@@ -98,6 +140,7 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [estimatedWait, setEstimatedWait] = useState(0);
   const [activities, setActivities] = useState([]);
+  const [kitchenNotes, setKitchenNotes] = useState([]);
   const wsRef = useRef(null);
 
   useEffect(() => {
@@ -107,24 +150,36 @@ export default function App() {
     ws.onmessage = (event) => {
       const { event: name, data } = JSON.parse(event.data);
 
-      if (name === 'orders:init') {
-        setOrders(data.orders);
-        setEstimatedWait(data.estimatedWait);
-        setActivities(data.activities || []);
-      } else if (name === 'order:created') {
-        setOrders((prev) => [...prev, data.order]);
-        setEstimatedWait(data.estimatedWait);
-        if (data.activity) setActivities((prev) => [...prev, data.activity]);
-      } else if (name === 'order:updated') {
-        setOrders((prev) =>
-          prev.map((o) => (o.id === data.order.id ? data.order : o))
-        );
-        setEstimatedWait(data.estimatedWait);
-        if (data.activity) setActivities((prev) => [...prev, data.activity]);
-      } else if (name === 'order:priority') {
-        setOrders((prev) =>
-          prev.map((o) => (o.id === data.order.id ? data.order : o))
-        );
+      switch (name) {
+        case 'orders:init':
+          setOrders(data.orders);
+          setEstimatedWait(data.estimatedWait);
+          setActivities(data.activities || []);
+          setKitchenNotes(data.kitchenNotes || []);
+          break;
+        case 'kitchen:note:added':
+          setKitchenNotes((prev) => [data.note, ...prev]);
+          break;
+        case 'kitchen:note:removed':
+          setKitchenNotes((prev) => prev.filter((n) => n.id !== data.noteId));
+          break;
+        case 'order:created':
+          setOrders((prev) => [...prev, data.order]);
+          setEstimatedWait(data.estimatedWait);
+          if (data.activity) setActivities((prev) => [...prev, data.activity]);
+          break;
+        case 'order:updated':
+          setOrders((prev) =>
+            prev.map((o) => (o.id === data.order.id ? data.order : o))
+          );
+          setEstimatedWait(data.estimatedWait);
+          if (data.activity) setActivities((prev) => [...prev, data.activity]);
+          break;
+        case 'order:priority':
+          setOrders((prev) =>
+            prev.map((o) => (o.id === data.order.id ? data.order : o))
+          );
+          break;
       }
     };
 
@@ -143,6 +198,18 @@ export default function App() {
     await fetch(`${API}/orders/${id}/status`, { method: 'PATCH' });
   };
 
+  const postNote = async (text) => {
+    await fetch(`${API}/kitchen/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+  };
+
+  const deleteNote = async (id) => {
+    await fetch(`${API}/kitchen/notes/${id}`, { method: 'DELETE' });
+  };
+
   const pending = orders.filter((o) => o.status === 'pending');
   const preparing = orders.filter((o) => o.status === 'preparing');
   const ready = orders.filter((o) => o.status === 'ready');
@@ -155,6 +222,7 @@ export default function App() {
       </header>
 
       <OrderForm onSubmit={createOrder} />
+      <KitchenNotesBoard notes={kitchenNotes} onPost={postNote} onDelete={deleteNote} />
       <ActivityFeed activities={activities} />
 
       <div className="columns">
