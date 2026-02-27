@@ -131,9 +131,15 @@ Reconnection logic goes in the `useEffect` in `App.jsx` where the comment `// Ta
 ## Running Locally
 
 ```bash
+# Install dependencies
+npm install
+
 # Server (port 4001)
-node server.js
+npm run server
 
 # Client (port 5173, proxies /api and /ws to 4001)
-cd client && npm install && npm run dev
+npm run client
+
+# Both together
+npm run dev
 ```
