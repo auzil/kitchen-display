@@ -40,9 +40,6 @@ function OrderCard({ order, onAdvance }) {
         {new Date(order.createdAt).toLocaleTimeString()}
       </div>
 
-      {/* Task Notes P1: render orderNotes list here */}
-      {/* Task Notes P1: render note submission form here */}
-
       {nextLabel[order.status] && (
         <button className="btn-advance" onClick={() => onAdvance(order.id)}>
           {nextLabel[order.status]}
@@ -87,7 +84,7 @@ function OrderForm({ onSubmit }) {
 }
 
 // ---------------------------------------------------------------------------
-// KitchenNotesBoard — Task Notes P2: implement this component
+// KitchenNotesBoard — Task B: implement this component
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -116,7 +113,6 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [estimatedWait, setEstimatedWait] = useState(0);
   const [activities, setActivities] = useState([]);
-  // Task Notes P1: const [kitchenNotes, setKitchenNotes] = useState([]);
   const [toastMessage, setToastMessage] = useState(null);
   const wsRef = useRef(null);
 
@@ -134,10 +130,7 @@ export default function App() {
           setOrders(data.orders);
           setEstimatedWait(data.estimatedWait);
           setActivities(data.activities || []);
-          // Task Notes P1: setKitchenNotes(data.kitchenNotes || []);
           break;
-        // Task Notes P1: handle 'kitchen:note:added'
-        // Task Notes P1: handle 'kitchen:note:removed'
         case 'order:created':
           setOrders((prev) => [...prev, data.order]);
           setEstimatedWait(data.estimatedWait);
@@ -150,9 +143,10 @@ export default function App() {
           setEstimatedWait(data.estimatedWait);
           if (data.activity) setActivities((prev) => [...prev, data.activity]);
           break;
-
       }
     };
+
+    // Task C: handle ws.onclose / reconnect logic here
 
     return () => ws.close();
   }, []);
@@ -177,10 +171,6 @@ export default function App() {
     }
   };
 
-  // Task Notes P1: postOrderNote(orderId, text)
-  // Task Notes P1: deleteOrderNote(noteId, orderId)
-  // Task Notes P2: postNote(text)
-  // Task Notes P2: deleteNote(id)
 
   const resetMemory = async () => {
     await fetch('/api/reset', { method: 'POST' });
@@ -197,12 +187,13 @@ export default function App() {
       )}
       <header>
         <h1>Kitchen Display</h1>
+        {/* Task C: connection badge goes here */}
         <span className="wait-badge">Est. wait: {estimatedWait} min</span>
         <button className="btn-reset" onClick={resetMemory}>Reset</button>
       </header>
 
       <OrderForm onSubmit={createOrder} />
-      {/* Task Notes P2: render KitchenNotesBoard here */}
+      {/* Task B: render KitchenNotesBoard here */}
       <ActivityFeed activities={activities} />
 
       <div className="columns">

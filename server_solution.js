@@ -15,7 +15,7 @@ let orderIdCounter = 1;
 let activityIdCounter = 1;
 let noteIdCounter = 1;
 
-const orders = [];       // { id, items, tableNum, status, priority, createdAt, noteIds }
+const orders = [];       // { id, items, tableNum, status, createdAt, noteIds }
 const activities = [];   // { id, type, orderId, message, timestamp }
 const kitchenNotes = []; // { id, text, author, orderId, createdAt }
 
@@ -63,9 +63,7 @@ function serializeOrder(order) {
     items: order.items,
     table: order.tableNum,
     status: order.status,
-    priority: order.priority,
     createdAt: order.createdAt,
-    noteIds: order.noteIds,
   };
 }
 
@@ -81,7 +79,6 @@ app.post('/api/orders', (req, res) => {
     items,
     tableNum: table || 'N/A',
     status: 'pending',
-    priority: 'normal',
     createdAt: new Date(),
     noteIds: [],
   };
@@ -114,65 +111,41 @@ app.patch('/api/orders/:id/status', (req, res) => {
   res.json({ order: payload });
 });
 
-// Task A: PATCH /api/orders/:id/priority
-// - 404 if order not found
-// - 400 if priority is missing or not 'urgent' | 'normal'
-// - 400 if order.status === 'ready' (can't reprioritize a finished order)
-// - Idempotent: if already at the requested priority, return 200 unchanged
-// - Update order.priority
-// - Emit: broadcast('order:priority', { order })
-// - Respond: 200 { order }
-
-// Task B: POST /api/kitchen/notes
+// POST /api/kitchen/notes — create a note (orderId optional for P2 general notes)
 app.post('/api/kitchen/notes', (req, res) => {
   const { text, orderId } = req.body;
+
   if (!text || typeof text !== 'string' || !text.trim()) {
-    return res.status(400).json({ error: 'Text is required' });
+    return res.status(400).json({ error: 'text is required' });
   }
   if (text.length > 500) {
-    return res.status(400).json({ error: 'Text must be 500 characters or fewer' });
+    return res.status(400).json({ error: 'text must be 500 characters or fewer' });
   }
 
-  let linkedOrder = null;
+  let order = null;
   if (orderId != null) {
-    linkedOrder = orders.find((o) => o.id === Number(orderId));
-    if (!linkedOrder) return res.status(404).json({ error: 'Order not found' });
+    order = orders.find((o) => o.id === Number(orderId));
+    if (!order) return res.status(404).json({ error: 'Order not found' });
   }
 
   const note = {
     id: noteIdCounter++,
     text: text.trim(),
     author: 'Kitchen',
-    orderId: linkedOrder ? linkedOrder.id : null,
+    orderId: order ? order.id : null,
     createdAt: new Date(),
   };
   kitchenNotes.push(note);
 
-  if (linkedOrder) {
-    linkedOrder.noteIds.push(note.id);
+  if (order) {
+    order.noteIds.push(note.id);
   }
 
   broadcast('kitchen:note:added', { note });
   res.status(201).json({ note });
 });
 
-// Task B: DELETE /api/kitchen/notes/:id  (general notes only)
-app.delete('/api/kitchen/notes/:id', (req, res) => {
-  const noteId = Number(req.params.id);
-  const noteIndex = kitchenNotes.findIndex((n) => n.id === noteId);
-  if (noteIndex === -1) return res.status(404).json({ error: 'Note not found' });
-
-  const note = kitchenNotes[noteIndex];
-  if (note.orderId !== null) {
-    return res.status(403).json({ error: 'Order notes can only be deleted from the order' });
-  }
-
-  kitchenNotes.splice(noteIndex, 1);
-  broadcast('kitchen:note:removed', { noteId, orderId: null });
-  res.status(204).end();
-});
-
-// DELETE /api/orders/:orderId/notes/:noteId  (order-specific notes)
+// DELETE /api/orders/:orderId/notes/:noteId — delete an order-linked note
 app.delete('/api/orders/:orderId/notes/:noteId', (req, res) => {
   const orderId = Number(req.params.orderId);
   const noteId = Number(req.params.noteId);
@@ -180,21 +153,35 @@ app.delete('/api/orders/:orderId/notes/:noteId', (req, res) => {
   const order = orders.find((o) => o.id === orderId);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
-  const noteIndex = kitchenNotes.findIndex((n) => n.id === noteId);
-  if (noteIndex === -1) return res.status(404).json({ error: 'Note not found' });
+  const noteIdx = kitchenNotes.findIndex((n) => n.id === noteId);
+  if (noteIdx === -1) return res.status(404).json({ error: 'Note not found' });
 
-  const note = kitchenNotes[noteIndex];
-  if (note.orderId !== orderId) {
-    return res.status(403).json({ error: 'Note does not belong to this order' });
-  }
+  const note = kitchenNotes[noteIdx];
+  if (note.orderId !== orderId) return res.status(403).json({ error: 'Note does not belong to this order' });
+  if (order.status === 'ready') return res.status(403).json({ error: 'Cannot delete notes for a ready order' });
 
-  if (order.status === 'ready') {
-    return res.status(403).json({ error: 'Cannot delete notes for a completed order' });
-  }
-
-  kitchenNotes.splice(noteIndex, 1);
+  kitchenNotes.splice(noteIdx, 1);
   order.noteIds = order.noteIds.filter((id) => id !== noteId);
+
   broadcast('kitchen:note:removed', { noteId, orderId });
+  res.status(204).end();
+});
+
+// DELETE /api/kitchen/notes/:id — delete a general (non-order) note
+app.delete('/api/kitchen/notes/:id', (req, res) => {
+  const noteId = Number(req.params.id);
+
+  const noteIdx = kitchenNotes.findIndex((n) => n.id === noteId);
+  if (noteIdx === -1) return res.status(404).json({ error: 'Note not found' });
+
+  const note = kitchenNotes[noteIdx];
+  if (note.orderId !== null) {
+    return res.status(403).json({ error: 'Order notes must be deleted via the order endpoint' });
+  }
+
+  kitchenNotes.splice(noteIdx, 1);
+
+  broadcast('kitchen:note:removed', { noteId, orderId: null });
   res.status(204).end();
 });
 
@@ -211,7 +198,7 @@ app.post('/api/reset', (_req, res) => {
   res.status(204).end();
 });
 
-// Task 0: on every new connection, send 'orders:init' with current state
+// on every new connection, send 'orders:init' with current state
 wss.on('connection', (ws) => {
   const estimatedWait = getEstimatedWait();
 

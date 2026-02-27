@@ -110,6 +110,10 @@ header h1 {
   color: #4da8da;
 }
 
+.order-notes-list li::before {
+  content: none;
+}
+
 .order-time {
   font-size: 0.75rem;
   color: #888;
@@ -319,7 +323,6 @@ header h1 {
 .order-note-item {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   background: #0a2540;
   border-radius: 6px;
   padding: 6px 10px;

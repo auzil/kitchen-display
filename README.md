@@ -1,216 +1,139 @@
-# Kitchen Display — Live Coding Exercise
+# Kitchen Display — Live Coding Interview
 
-A fullstack restaurant kitchen display built with **Express + ws** (backend) and **React + Vite** (frontend).
-
-Your job is to implement the tasks below inside **`server.js`** and **`client/src/App.jsx`**.
-`// Task X:` comments are already placed in both files to guide you.
-
-**Order states:** `pending` → `preparing` → `ready`
+A real-time kitchen order management system used as a live coding challenge for fullstack developers.
 
 ---
 
-## Running the project
+## Architecture
 
-```bash
-# Install server dependencies
-npm install
+```
+client/          React + Vite SPA
+  src/
+    App.jsx      All UI components (Toast, OrderCard, OrderForm, ActivityFeed, App)
+    App.css
 
-# Install client dependencies
-cd client && npm install && cd ..
-
-# Run both server and client together
-npm run dev
+server.js        Express + ws server (in-memory state, no database)
 ```
 
-Server: **http://localhost:4001** · Client: **http://localhost:5173**
+### Communication
+
+- **REST** — order creation and status transitions
+- **WebSocket** (`/ws`) — real-time broadcast of all state changes to every connected client
+
+### In-memory state
+
+| Store | Shape | Description |
+|---|---|---|
+| `orders` | `{ id, items, tableNum, status, createdAt, noteIds }` | All orders |
+| `activities` | `{ id, type, orderId, message, timestamp }` | Activity log entries |
+| `kitchenNotes` | `{ id, text, author, orderId, createdAt }` | General kitchen board notes |
+
+### Order lifecycle
+
+```
+pending → preparing → ready
+```
+
+### REST endpoints (implemented)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/orders` | Place a new order |
+| `PATCH` | `/api/orders/:id/status` | Advance order to next status |
+| `POST` | `/api/reset` | Clear all in-memory state |
+
+### WebSocket events
+
+| Event | Direction | Payload |
+|---|---|---|
+| `orders:init` | server → client | `{ orders, estimatedWait, activities, kitchenNotes }` |
+| `order:created` | server → client | `{ order, estimatedWait, activity }` |
+| `order:updated` | server → client | `{ order, estimatedWait, activity }` |
 
 ---
 
-## What's already implemented
+## Interview Tasks
 
-### Backend (`server.js`)
+Recommended order: **Task 0 → Task A → Task B → Task C**
 
-| | What's done |
-|-|-------------|
-| `getEstimatedWait()` | pending items × 5 min + preparing items × 3 min |
-| `addActivity(type, order)` | creates and stores an activity feed entry |
-| `POST /api/orders` | validates items, creates order, emits `order:created` |
-| `PATCH /api/orders/:id/status` | advances `pending → preparing → ready`, emits `order:updated` |
-
-### Frontend (`client/src/App.jsx`)
-
-| | What's done |
-|-|-------------|
-| `OrderCard` | shows order id, table, items, time, advance button |
-| `OrderForm` | comma-separated items + table input, POST on submit |
-| `ActivityFeed` | reverse-chronological activity list |
-| `orders:init` handler | sets orders, estimatedWait, activities |
-| `order:created` handler | appends new order and activity |
-| `order:updated` handler | replaces updated order and appends activity |
-| `createOrder` | `POST /api/orders` |
-| `advanceOrder` | `PATCH /api/orders/:id/status` |
-
----
-
-## Tasks
+The candidate is expected to design appropriate HTTP status codes for all new endpoints on their own.
 
 ---
 
 ### Task 0 — Send State on Connection
 
-**Difficulty:** Easy · **Files:** `server.js`
+**As a kitchen staff member opening the display on any screen, I want to immediately see all current orders and activity so that I'm up to date without refreshing.**
 
-Inside `wss.on('connection')`, send `orders:init` to the newly connected WebSocket client with the current server state.
+- When a client connects via WebSocket, the server sends `orders:init` with the current state
+- Payload: `{ orders, estimatedWait, activities }`
 
-**Payload:**
-
-| Field | Value |
-|-------|-------|
-| `orders` | the current orders array |
-| `estimatedWait` | result of `getEstimatedWait()` |
-| `activities` | the current activities array |
+_Already scaffolded — verify it works before moving on._
 
 ---
 
-### Task A — Order Priority / Urgent Bumping
+### Task A — Order Notes _(Priority 1)_
 
-**Difficulty:** Medium · **Files:** `server.js`, `App.jsx`
+**As a kitchen staff member, I want to attach quick notes to a specific order so that I can communicate special instructions or updates to my colleagues on every screen.**
 
-#### Backend
+- Each order card has an "Add a note…" input at the bottom
+- Submitting a note adds it to the card immediately: shows text, author (`Kitchen`), timestamp, and a ✕ delete button
+- All connected screens see notes appear and disappear in real time via WebSocket broadcast
+- Notes on a `ready` order **cannot be deleted** — the server returns an error, the UI shows a toast
+- Notes survive a WebSocket reconnection — they are restored as part of `orders:init`
+- Maximum note length: 500 characters, enforced on both client and server
 
-1. Add `priority: 'normal'` to the order object created in `POST /api/orders`.
+**New endpoints the candidate must implement (HTTP codes are theirs to decide):**
 
-2. New endpoint: `PATCH /api/orders/:id/priority`
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/orders/:orderId/notes` | Add a note to an order |
+| `DELETE` | `/api/orders/:orderId/notes/:noteId` | Delete a note (blocked if order is `ready`) |
 
-   | Rule | Detail |
-   |------|--------|
-   | Body | `{ priority: 'urgent' \| 'normal' }` |
-   | 404 | order not found |
-   | 400 | `priority` missing or not one of the two allowed values |
-   | 400 | `order.status === 'ready'` — can't reprioritize a finished order |
-   | Idempotent | if already at the requested priority, return `200` unchanged |
-   | Emit | `broadcast('order:priority', { order })` |
-   | Response | `200 { order }` |
-
-#### Frontend
-
-1. Handle `order:priority` WebSocket message — replace the updated order in state.
-2. Add `togglePriority(id, currentPriority)` — PATCHes the priority endpoint, toggling between `'urgent'` and `'normal'`.
-3. Sort each column so urgent orders appear first.
-4. In `OrderCard`: show an `URGENT` badge and a toggle button when `priority === 'urgent'`.
+`DELETE` responds with no body.
 
 ---
 
-### Task B — Kitchen Broadcast Notes Board
+### Task B — General Kitchen Notes Board _(Priority 2)_
 
-**Difficulty:** Medium · **Files:** `server.js`, `App.jsx`
+**As a kitchen staff member, I want a shared announcement board at the top of the display so that I can post general notes visible to everyone in the kitchen instantly.**
 
-#### Backend
+- A board at the top of the display lets staff post free-text notes
+- Notes appear instantly on all screens, newest first
+- General notes show a ✕ delete button; notes linked to an order are read-only and show an `Order #N` badge
+- Board state survives reconnection — restored on `orders:init`
+- Maximum note length: 500 characters, enforced on both client and server
 
-1. Add at module level: `let kitchenNotes = [];` and `let nextNoteId = 1;`
+**New endpoints the candidate must implement (HTTP codes are theirs to decide):**
 
-2. New endpoint: `POST /api/kitchen/notes`
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/kitchen/notes` | Post a general kitchen note |
+| `DELETE` | `/api/kitchen/notes/:id` | Delete a general kitchen note |
 
-   | Rule | Detail |
-   |------|--------|
-   | Body | `{ text: string }` |
-   | 400 | `text` missing, not a string, or empty after trim |
-   | 400 | `text.length > 500` |
-   | Create | `{ id: nextNoteId++, text: text.trim(), createdAt: new Date().toISOString(), author: 'Kitchen' }` |
-   | Emit | `broadcast('kitchen:note:added', { note })` |
-   | Response | `201 { note }` |
+`DELETE` responds with no body (do not call `.json()` on the response client-side).
 
-3. New endpoint: `DELETE /api/kitchen/notes/:id`
-
-   | Rule | Detail |
-   |------|--------|
-   | 404 | note not found |
-   | Emit | `broadcast('kitchen:note:removed', { noteId: Number(req.params.id) })` |
-   | Response | `204` — **no body**, do not call `res.json()` |
-
-4. Extend `orders:init` to also include `kitchenNotes` in the payload.
-
-#### Frontend
-
-1. Add `kitchenNotes` state.
-2. Extend `orders:init` handler to set `kitchenNotes`.
-3. Handle `kitchen:note:added` (prepend) and `kitchen:note:removed` (filter) WebSocket messages.
-4. Add `postNote(text)` and `deleteNote(id)` functions.
-5. Add a `KitchenNotesBoard` component with a form to post notes and a list to display/delete them.
-
-> **204 trap:** calling `.json()` on a 204 response throws — don't do it in `deleteNote`.
+The `KitchenNotesBoard` component is stubbed in `App.jsx` — candidate fills it in.
 
 ---
 
-### Task C — Reconnection State Recovery
+### Task C — WebSocket Reconnection _(Priority 3)_
 
-**Difficulty:** Medium · **Files:** `App.jsx` only
+**As a kitchen staff member, I want the display to recover silently if the connection drops so that I never need to manually refresh the page.**
 
-No backend changes needed — `wss.on('connection')` already sends `orders:init`, so every reconnect automatically triggers a full state push.
+- A `● Live` / `● Reconnecting…` badge appears in the header reflecting connection state
+- On reconnect, full state is restored via the existing `orders:init` event — no extra REST calls needed
+- The server requires no changes
 
-#### Frontend
-
-1. Add `connected` state, initialized from `ws.readyState === WebSocket.OPEN` (not hardcoded `false`).
-2. Inside `useEffect`, handle `ws.onopen` / `ws.onclose` to update `connected`; the existing cleanup (`ws.close()`) handles teardown.
-3. The existing `orders:init` handler already restores full state on reconnect — no REST call needed.
-4. Show a connection badge in the header:
-
-   ```jsx
-   <span className={`conn-badge ${connected ? 'live' : 'reconnecting'}`}>
-     {connected ? '● Live' : '● Reconnecting…'}
-   </span>
-   ```
-
-   ```css
-   /* App.css */
-   .conn-badge.live         { color: #2ecc71; }
-   .conn-badge.reconnecting { color: #f0a500; }
-   ```
+Reconnection logic goes in the `useEffect` in `App.jsx` where the comment `// Task C` appears.
 
 ---
 
-## Data shapes
+## Running Locally
 
-```js
-// Order
-{
-  id: number,
-  items: string[],
-  table: string,
-  status: 'pending' | 'preparing' | 'ready',
-  priority: 'normal' | 'urgent',   // added in Task A
-  createdAt: string,               // ISO 8601
-}
+```bash
+# Server (port 4001)
+node server.js
 
-// Activity
-{
-  id: number,
-  type: 'created' | 'preparing' | 'ready',
-  orderId: number,
-  message: string,
-  timestamp: string,               // ISO 8601
-}
-
-// KitchenNote (added in Task B)
-{
-  id: number,
-  text: string,
-  author: string,
-  createdAt: string,               // ISO 8601
-}
+# Client (port 5173, proxies /api and /ws to 4001)
+cd client && npm install && npm run dev
 ```
-
----
-
-## WebSocket events
-
-Messages are JSON-encoded as `{ event, data }`. The client reads them via `ws.onmessage` and the server sends them via `broadcast(event, data)`.
-
-| Event | Direction | Payload |
-|-------|-----------|---------|
-| `orders:init` | server → client | `{ orders, estimatedWait, activities, kitchenNotes }` |
-| `order:created` | server → client | `{ order, estimatedWait, activity }` |
-| `order:updated` | server → client | `{ order, estimatedWait, activity }` |
-| `order:priority` | server → client | `{ order }` |
-| `kitchen:note:added` | server → client | `{ note }` |
-| `kitchen:note:removed` | server → client | `{ noteId }` |

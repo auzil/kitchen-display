@@ -13,9 +13,11 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 // In-memory store
 let orderIdCounter = 1;
 let activityIdCounter = 1;
+let noteIdCounter = 1;
 
-const orders = [];     // { id, items, tableNum, status, createdAt }
-const activities = []; // { id, type, orderId, message, timestamp }
+const orders = [];       // { id, items, tableNum, status, createdAt, noteIds }
+const activities = [];   // { id, type, orderId, message, timestamp }
+const kitchenNotes = []; // { id, text, author, orderId, createdAt }
 
 // Broadcast a named event to all connected clients
 function broadcast(event, data) {
@@ -78,6 +80,7 @@ app.post('/api/orders', (req, res) => {
     tableNum: table || 'N/A',
     status: 'pending',
     createdAt: new Date(),
+    noteIds: [],
   };
   orders.push(order);
 
@@ -108,22 +111,20 @@ app.patch('/api/orders/:id/status', (req, res) => {
   res.json({ order: payload });
 });
 
-// Task Notes P1: POST /api/kitchen/notes  (with orderId)
-// Task Notes P1: DELETE /api/orders/:orderId/notes/:noteId
-// Task Notes P2: DELETE /api/kitchen/notes/:id  (general notes only)
-
 // POST /api/reset — clear all in-memory state and broadcast empty orders:init
 app.post('/api/reset', (_req, res) => {
   orders.length = 0;
   activities.length = 0;
+  kitchenNotes.length = 0;
   orderIdCounter = 1;
   activityIdCounter = 1;
+  noteIdCounter = 1;
 
   broadcast('orders:init', { orders: [], estimatedWait: 0, activities: [], kitchenNotes: [] });
   res.status(204).end();
 });
 
-// on every new connection, send 'orders:init' with current state
+// Task 0: on every new connection, send 'orders:init' with current state
 wss.on('connection', (ws) => {
   const estimatedWait = getEstimatedWait();
 
@@ -134,7 +135,7 @@ wss.on('connection', (ws) => {
         orders: orders.map(serializeOrder),
         estimatedWait,
         activities,
-        kitchenNotes: [],
+        kitchenNotes,
       },
     }),
   );
