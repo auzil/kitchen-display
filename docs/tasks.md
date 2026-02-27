@@ -19,32 +19,7 @@ Inside `wss.on('connection')` in `server.js`, send `orders:init` to the newly co
 
 ---
 
-## Task A — Order Priority / Urgent Bumping
-
-### Backend (`server.js`)
-
-1. Add `priority: 'normal'` to the order object created in `POST /api/orders`
-
-2. New endpoint: `PATCH /api/orders/:id/priority`
-   - Body: `{ priority: 'urgent' | 'normal' }`
-   - 404 if order not found
-   - 400 if `priority` is missing or not one of the two allowed values
-   - 400 if `order.status === 'ready'`
-   - Idempotent: if already at the requested priority, return 200 unchanged
-   - Update `order.priority`
-   - Emit: `broadcast('order:priority', { order })`
-   - Respond: `200 { order }`
-
-### Frontend (`App.jsx`)
-
-1. Handle `order:priority` WebSocket message — replace the updated order in state
-2. Add `togglePriority(id, currentPriority)` function — `PATCH` the priority endpoint
-3. Sort each column so urgent orders appear first
-4. In `OrderCard`: show an `URGENT` badge and a toggle button when `priority === 'urgent'`
-
----
-
-## Task B — Kitchen Broadcast Notes Board
+## Task A — Kitchen Broadcast Notes Board
 
 ### Backend (`server.js`)
 

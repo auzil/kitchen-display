@@ -10,6 +10,13 @@ app.use(express.json());
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
+// In-memory store
+let orderIdCounter = 1;
+let activityIdCounter = 1;
+
+const orders = [];     // { id, items, tableNum, status, createdAt }
+const activities = []; // { id, type, orderId, message, timestamp }
+
 // Broadcast a named event to all connected clients
 function broadcast(event, data) {
   const msg = JSON.stringify({ event, data });
@@ -20,47 +27,42 @@ function broadcast(event, data) {
   }
 }
 
-// In-memory order store
-let orders = [];
-let nextId = 1;
-
-// Activity feed
-let activities = [];
-let nextActivityId = 1;
-
-let kitchenNotes = [];
-let nextNoteId = 1;
-
 const activityMessages = {
-  created: (o) => `Order #${o.id} placed — Table ${o.table} (${o.items.join(', ')})`,
+  created: (o) => `Order #${o.id} placed — Table ${o.tableNum} (${o.items.join(', ')})`,
   preparing: (o) => `Order #${o.id} is now being prepared`,
   ready: (o) => `Order #${o.id} is ready!`,
 };
 
 function addActivity(type, order) {
   const activity = {
-    id: nextActivityId++,
+    id: activityIdCounter++,
     type,
     orderId: order.id,
     message: activityMessages[type](order),
-    timestamp: new Date().toISOString(),
+    timestamp: new Date(),
   };
   activities.push(activity);
   return activity;
 }
 
 function getEstimatedWait() {
-  const pending = orders.filter((o) => o.status === 'pending');
-  const pendingItemsCount = pending.reduce((acc, item) => {
-    return acc += item.items.length;
-  }, 0);
-
-  const preparing = orders.filter((o) => o.status === 'preparing');
-  const preparingItemsCount = preparing.reduce((acc, item) => {
-    return acc += item.items.length;
-  }, 0);
-
+  const pendingItemsCount = orders
+    .filter((o) => o.status === 'pending')
+    .reduce((acc, o) => acc + o.items.length, 0);
+  const preparingItemsCount = orders
+    .filter((o) => o.status === 'preparing')
+    .reduce((acc, o) => acc + o.items.length, 0);
   return pendingItemsCount * 5 + preparingItemsCount * 3;
+}
+
+function serializeOrder(order) {
+  return {
+    id: order.id,
+    items: order.items,
+    table: order.tableNum,
+    status: order.status,
+    createdAt: order.createdAt,
+  };
 }
 
 // REST: Create order
@@ -71,18 +73,20 @@ app.post('/api/orders', (req, res) => {
   }
 
   const order = {
-    id: nextId++,
+    id: orderIdCounter++,
     items,
-    table: table || 'N/A',
+    tableNum: table || 'N/A',
     status: 'pending',
-    // Task A: add priority field with default value 'normal'
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(),
   };
-
   orders.push(order);
+
   const createdActivity = addActivity('created', order);
-  broadcast('order:created', { order, estimatedWait: getEstimatedWait(), activity: createdActivity });
-  res.status(201).json({ order, estimatedWait: getEstimatedWait() });
+  const estimatedWait = getEstimatedWait();
+
+  const payload = serializeOrder(order);
+  broadcast('order:created', { order: payload, estimatedWait, activity: createdActivity });
+  res.status(201).json({ order: payload, estimatedWait });
 });
 
 // REST: Update order status (pending → preparing → ready)
@@ -95,57 +99,45 @@ app.patch('/api/orders/:id/status', (req, res) => {
   if (!next) return res.status(400).json({ error: 'Order already completed' });
 
   order.status = next;
+
   const updatedActivity = addActivity(next, order);
-  broadcast('order:updated', { order, estimatedWait: getEstimatedWait(), activity: updatedActivity });
-  res.json({ order });
+  const estimatedWait = getEstimatedWait();
+
+  const payload = serializeOrder(order);
+  broadcast('order:updated', { order: payload, estimatedWait, activity: updatedActivity });
+  res.json({ order: payload });
 });
 
-// Task A: PATCH /api/orders/:id/priority
-// - 404 if order not found
-// - 400 if priority is missing or not 'urgent' | 'normal'
-// - 400 if order.status === 'ready' (can't reprioritize a finished order)
-// - Idempotent: if already at the requested priority, return 200 unchanged
-// - Update order.priority
-// - Emit: broadcast('order:priority', { order })
-// - Respond: 200 { order }
+// Task Notes P1: POST /api/kitchen/notes  (with orderId)
+// Task Notes P1: DELETE /api/orders/:orderId/notes/:noteId
+// Task Notes P2: DELETE /api/kitchen/notes/:id  (general notes only)
 
-// Task B: POST /api/kitchen/notes
-app.post('/api/kitchen/notes', (req, res) => {
-  const { text } = req.body;
-  if (!text || typeof text !== 'string' || !text.trim()) {
-    return res.status(400).json({ error: 'Text is required' });
-  }
-  if (text.length > 500) {
-    return res.status(400).json({ error: 'Text must be 500 characters or fewer' });
-  }
-  const note = {
-    id: nextNoteId++,
-    text: text.trim(),
-    createdAt: new Date().toISOString(),
-    author: 'Kitchen',
-  };
-  kitchenNotes.push(note);
-  broadcast('kitchen:note:added', { note });
-  res.status(201).json({ note });
-});
+// POST /api/reset — clear all in-memory state and broadcast empty orders:init
+app.post('/api/reset', (_req, res) => {
+  orders.length = 0;
+  activities.length = 0;
+  orderIdCounter = 1;
+  activityIdCounter = 1;
 
-// Task B: DELETE /api/kitchen/notes/:id
-app.delete('/api/kitchen/notes/:id', (req, res) => {
-  const noteId = Number(req.params.id);
-  const index = kitchenNotes.findIndex((n) => n.id === noteId);
-  if (index === -1) return res.status(404).json({ error: 'Note not found' });
-  kitchenNotes.splice(index, 1);
-  broadcast('kitchen:note:removed', { noteId });
+  broadcast('orders:init', { orders: [], estimatedWait: 0, activities: [], kitchenNotes: [] });
   res.status(204).end();
 });
 
-// Task 0: on every new connection, send 'orders:init' with current state
+// on every new connection, send 'orders:init' with current state
 wss.on('connection', (ws) => {
-  // Task 0: send 'orders:init' with { orders, estimatedWait, activities }
-  ws.send(JSON.stringify({
-    event: 'orders:init',
-    data: { orders, estimatedWait: getEstimatedWait(), activities, kitchenNotes },
-  }));
+  const estimatedWait = getEstimatedWait();
+
+  ws.send(
+    JSON.stringify({
+      event: 'orders:init',
+      data: {
+        orders: orders.map(serializeOrder),
+        estimatedWait,
+        activities,
+        kitchenNotes: [],
+      },
+    }),
+  );
 });
 
 const PORT = process.env.PORT || 4001;

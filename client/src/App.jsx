@@ -1,8 +1,21 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 
-const API = '/api';
-const WS_URL = `ws://${window.location.host}/ws`;
+// ---------------------------------------------------------------------------
+// Toast
+// ---------------------------------------------------------------------------
+function Toast({ message, onDismiss }) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 5000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
+
+  return (
+    <div className="toast-error" onClick={onDismiss}>
+      {message}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // OrderCard
@@ -27,8 +40,11 @@ function OrderCard({ order, onAdvance }) {
         {new Date(order.createdAt).toLocaleTimeString()}
       </div>
 
+      {/* Task Notes P1: render orderNotes list here */}
+      {/* Task Notes P1: render note submission form here */}
+
       {nextLabel[order.status] && (
-        <button onClick={() => onAdvance(order.id)}>
+        <button className="btn-advance" onClick={() => onAdvance(order.id)}>
           {nextLabel[order.status]}
         </button>
       )}
@@ -45,7 +61,6 @@ function OrderForm({ onSubmit }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!items.trim()) return;
     onSubmit({
       items: items.split(',').map((s) => s.trim()).filter(Boolean),
       table: table || 'N/A',
@@ -60,7 +75,6 @@ function OrderForm({ onSubmit }) {
         placeholder="Items (comma separated)"
         value={items}
         onChange={(e) => setItems(e.target.value)}
-        required
       />
       <input
         placeholder="Table #"
@@ -73,46 +87,8 @@ function OrderForm({ onSubmit }) {
 }
 
 // ---------------------------------------------------------------------------
-// KitchenNotesBoard
+// KitchenNotesBoard — Task Notes P2: implement this component
 // ---------------------------------------------------------------------------
-function KitchenNotesBoard({ notes, onPost, onDelete }) {
-  const [text, setText] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!text.trim()) return;
-    onPost(text);
-    setText('');
-  };
-
-  return (
-    <div className="kitchen-notes-board">
-      <h2>Kitchen Notes</h2>
-      <form className="kitchen-notes-form" onSubmit={handleSubmit}>
-        <textarea
-          placeholder="Broadcast a note to the kitchen…"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          maxLength={500}
-        />
-        <button type="submit">Post</button>
-      </form>
-      <div>
-        {notes.map((note) => (
-          <div key={note.id} className="kitchen-note-item">
-            <div className="kitchen-note-text">
-              {note.text}
-              <div className="kitchen-note-meta">
-                {note.author} · {new Date(note.createdAt).toLocaleTimeString()}
-              </div>
-            </div>
-            <button onClick={() => onDelete(note.id)}>✕</button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // ActivityFeed
@@ -140,11 +116,14 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [estimatedWait, setEstimatedWait] = useState(0);
   const [activities, setActivities] = useState([]);
-  const [kitchenNotes, setKitchenNotes] = useState([]);
+  // Task Notes P1: const [kitchenNotes, setKitchenNotes] = useState([]);
+  const [toastMessage, setToastMessage] = useState(null);
   const wsRef = useRef(null);
 
+  const showError = useCallback((msg) => setToastMessage(msg), []);
+
   useEffect(() => {
-    const ws = new WebSocket(WS_URL);
+    const ws = new WebSocket(`ws://${window.location.host}/ws`);
     wsRef.current = ws;
 
     ws.onmessage = (event) => {
@@ -155,14 +134,10 @@ export default function App() {
           setOrders(data.orders);
           setEstimatedWait(data.estimatedWait);
           setActivities(data.activities || []);
-          setKitchenNotes(data.kitchenNotes || []);
+          // Task Notes P1: setKitchenNotes(data.kitchenNotes || []);
           break;
-        case 'kitchen:note:added':
-          setKitchenNotes((prev) => [data.note, ...prev]);
-          break;
-        case 'kitchen:note:removed':
-          setKitchenNotes((prev) => prev.filter((n) => n.id !== data.noteId));
-          break;
+        // Task Notes P1: handle 'kitchen:note:added'
+        // Task Notes P1: handle 'kitchen:note:removed'
         case 'order:created':
           setOrders((prev) => [...prev, data.order]);
           setEstimatedWait(data.estimatedWait);
@@ -175,11 +150,7 @@ export default function App() {
           setEstimatedWait(data.estimatedWait);
           if (data.activity) setActivities((prev) => [...prev, data.activity]);
           break;
-        case 'order:priority':
-          setOrders((prev) =>
-            prev.map((o) => (o.id === data.order.id ? data.order : o))
-          );
-          break;
+
       }
     };
 
@@ -187,27 +158,32 @@ export default function App() {
   }, []);
 
   const createOrder = async (data) => {
-    await fetch(`${API}/orders`, {
+    const res = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showError(body.error || 'Failed to place order');
+    }
   };
 
   const advanceOrder = async (id) => {
-    await fetch(`${API}/orders/${id}/status`, { method: 'PATCH' });
+    const res = await fetch(`/api/orders/${id}/status`, { method: 'PATCH' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showError(body.error || 'Failed to advance order');
+    }
   };
 
-  const postNote = async (text) => {
-    await fetch(`${API}/kitchen/notes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-  };
+  // Task Notes P1: postOrderNote(orderId, text)
+  // Task Notes P1: deleteOrderNote(noteId, orderId)
+  // Task Notes P2: postNote(text)
+  // Task Notes P2: deleteNote(id)
 
-  const deleteNote = async (id) => {
-    await fetch(`${API}/kitchen/notes/${id}`, { method: 'DELETE' });
+  const resetMemory = async () => {
+    await fetch('/api/reset', { method: 'POST' });
   };
 
   const pending = orders.filter((o) => o.status === 'pending');
@@ -216,32 +192,48 @@ export default function App() {
 
   return (
     <div className="app">
+      {toastMessage && (
+        <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
+      )}
       <header>
         <h1>Kitchen Display</h1>
         <span className="wait-badge">Est. wait: {estimatedWait} min</span>
+        <button className="btn-reset" onClick={resetMemory}>Reset</button>
       </header>
 
       <OrderForm onSubmit={createOrder} />
-      <KitchenNotesBoard notes={kitchenNotes} onPost={postNote} onDelete={deleteNote} />
+      {/* Task Notes P2: render KitchenNotesBoard here */}
       <ActivityFeed activities={activities} />
 
       <div className="columns">
         <div className="column pending">
           <h2>Pending ({pending.length})</h2>
           {pending.map((o) => (
-            <OrderCard key={o.id} order={o} onAdvance={advanceOrder} />
+            <OrderCard
+              key={o.id}
+              order={o}
+              onAdvance={advanceOrder}
+            />
           ))}
         </div>
         <div className="column preparing">
           <h2>Preparing ({preparing.length})</h2>
           {preparing.map((o) => (
-            <OrderCard key={o.id} order={o} onAdvance={advanceOrder} />
+            <OrderCard
+              key={o.id}
+              order={o}
+              onAdvance={advanceOrder}
+            />
           ))}
         </div>
         <div className="column ready">
           <h2>Ready ({ready.length})</h2>
           {ready.map((o) => (
-            <OrderCard key={o.id} order={o} onAdvance={advanceOrder} />
+            <OrderCard
+              key={o.id}
+              order={o}
+              onAdvance={advanceOrder}
+            />
           ))}
         </div>
       </div>

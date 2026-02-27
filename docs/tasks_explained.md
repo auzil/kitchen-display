@@ -61,72 +61,7 @@ wss.on('connection', (ws) => {
 
 ---
 
-### Task A — Order Priority / Urgent Bumping
-
-**Difficulty:** Medium
-**Estimated time:** 25 min
-
-#### Backend (`server.js`)
-
-1. Add `priority: 'normal'` to the order object created in `POST /api/orders`
-
-2. New endpoint: `PATCH /api/orders/:id/priority`
-   - Body: `{ priority: 'urgent' | 'normal' }`
-   - 404 if order not found
-   - 400 if `priority` is missing or not one of the two allowed values
-   - 400 if `order.status === 'ready'` (can't reprioritize a finished order)
-   - Idempotent: if already at the requested priority, return 200 unchanged
-   - Update `order.priority`
-   - Emit: `broadcast('order:priority', { order })`
-   - Respond: `200 { order }`
-
-#### Frontend (`App.jsx`)
-
-1. Handle new WebSocket message in `ws.onmessage`:
-   ```js
-   } else if (name === 'order:priority') {
-     setOrders((prev) => prev.map((o) => o.id === data.order.id ? data.order : o));
-   }
-   ```
-
-2. New function:
-   ```js
-   const togglePriority = async (id, currentPriority) => {
-     const next = currentPriority === 'urgent' ? 'normal' : 'urgent';
-     await fetch(`${API}/orders/${id}/priority`, {
-       method: 'PATCH',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ priority: next }),
-     });
-   };
-   ```
-
-3. In each column, sort before rendering so urgent orders float to the top:
-   ```js
-   const byPriority = (a, b) => (a.priority === 'urgent' ? 0 : 1) - (b.priority === 'urgent' ? 0 : 1);
-   const pending = orders.filter((o) => o.status === 'pending').sort(byPriority);
-   // same for preparing, ready
-   ```
-
-4. In `OrderCard`:
-   - Show `<span className="urgent-badge">URGENT</span>` when `order.priority === 'urgent'`
-   - Add toggle button: `"Mark Urgent"` / `"Clear Urgent"`
-   - Pass `onTogglePriority` prop from `App`
-
-#### What it tests
-- Dedicated focused endpoint vs. overloading existing one (separation of concerns)
-- Default field initialization retrofitted into existing creation logic
-- Derived sort — computed from state, not stored separately
-- Idempotency reasoning
-
-#### Discussion questions
-1. New event `order:priority` vs. reusing `order:updated` — trade-offs? When would you consolidate?
-2. Should `preparing` orders also be blocked from priority changes?
-3. Two staff members toggle the same order simultaneously — what inconsistency can arise without a database?
-
----
-
-### Task B — Kitchen Broadcast Notes Board
+### Task A — Kitchen Broadcast Notes Board
 
 **Difficulty:** Medium
 **Estimated time:** 25 min
@@ -327,9 +262,9 @@ Because the server sends `orders:init` inside `wss.on('connection')`, every reco
 
 | Session | Tasks | Focus |
 |---------|-------|-------|
-| Balanced senior | A → B | Priority + notes board |
-| Full assessment | A + B + C | Priority, kitchen board, reconnection |
-| Warm-up first | C → A | Reliability thinking, then UX feature |
+| Balanced senior | A → B | Notes board + reconnection |
+| Full assessment | A + B + C | Notes, broadcast board, reconnection |
+| Warm-up first | C → A | Reliability thinking, then notes feature |
 
 ---
 
@@ -341,8 +276,7 @@ Because the server sends `orders:init` inside `wss.on('connection')`, every reco
 | In-memory data manipulation | A, B, C |
 | WebSocket event design | A, B, C |
 | React `useState` / `useEffect` patterns | A, B, C |
-| Local vs. global component state | B |
+| Local vs. global component state | A |
 | 204 / no-body response handling | B |
 | Custom hook / component decomposition | A, B |
 | Real-time reliability & REST fallback | C |
-| Idempotency reasoning | A, C |

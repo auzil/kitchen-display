@@ -300,6 +300,101 @@ header h1 {
   color: #e94560;
 }
 
+.order-note-badge {
+  display: inline-block;
+  background: #4da8da22;
+  color: #4da8da;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  border: 1px solid #4da8da55;
+}
+
+.order-notes-list {
+  margin-bottom: 8px;
+}
+
+.order-note-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  background: #0a2540;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  gap: 8px;
+  border-left: 3px solid #4da8da;
+}
+
+.order-note-text {
+  flex: 1;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  color: #cce;
+}
+
+.order-note-meta {
+  font-size: 0.68rem;
+  color: #777;
+  margin-top: 3px;
+}
+
+.order-note-delete {
+  background: transparent !important;
+  border: 1px solid #444 !important;
+  color: #666 !important;
+  border-radius: 4px !important;
+  padding: 2px 6px !important;
+  cursor: pointer;
+  font-size: 0.7rem !important;
+  width: auto !important;
+  flex-shrink: 0;
+}
+
+.order-note-delete:hover {
+  border-color: #e94560 !important;
+  color: #e94560 !important;
+}
+
+.order-note-form {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.order-note-form input {
+  flex: 1;
+  padding: 5px 10px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #0a2540;
+  color: #eee;
+  font-size: 0.8rem;
+}
+
+.order-note-form button {
+  padding: 5px 12px;
+  background: #4da8da;
+  color: #1a1a2e;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.78rem;
+  width: auto !important;
+}
+
+.order-note-form button:hover {
+  opacity: 0.85;
+}
+
+.btn-advance {
+  width: 100%;
+  margin-top: 4px;
+}
+
 /* ── Task C: Connection Badge ───────────────────────────────────────────── */
 
 .conn-badge {
@@ -318,4 +413,45 @@ header h1 {
 .conn-badge.reconnecting {
   background: #4a3a10;
   color: #f0a500;
+}
+
+/* ── Reset Button ───────────────────────────────────────────────────────── */
+
+.btn-reset {
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid #555;
+  color: #888;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-reset:hover {
+  border-color: #e94560;
+  color: #e94560;
+}
+
+/* ── Toast Error ────────────────────────────────────────────────────────── */
+
+.toast-error {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #e94560;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  z-index: 1000;
+  animation: toast-in 0.2s ease;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
