@@ -86,6 +86,7 @@ header h1 {
 .column.ready h2 { border-color: #2ecc71; }
 
 .order-card {
+  position: relative;
   background: #0f3460;
   border-radius: 8px;
   padding: 12px;
@@ -107,6 +108,10 @@ header h1 {
 .order-card ul li::before {
   content: "• ";
   color: #4da8da;
+}
+
+.order-notes-list li::before {
+  content: none;
 }
 
 .order-time {
@@ -174,4 +179,282 @@ header h1 {
   font-size: 0.75rem;
   white-space: nowrap;
   margin-left: 12px;
+}
+
+/* ── Task A: Priority / Urgent Bumping ─────────────────────────────────── */
+
+.urgent-badge {
+  display: inline-block;
+  background: #e94560;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.order-card.urgent {
+  border: 1px solid #e94560;
+}
+
+.btn-priority {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid #e94560;
+  border-radius: 6px;
+  background: transparent;
+  color: #e94560;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-priority:hover {
+  background: #e94560;
+  color: #fff;
+}
+
+/* ── Task B: Kitchen Notes Board ────────────────────────────────────────── */
+
+.kitchen-notes-board {
+  background: #16213e;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.kitchen-notes-board h2 {
+  font-size: 1rem;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #f0a500;
+}
+
+.kitchen-notes-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.kitchen-notes-form textarea {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #0f3460;
+  color: #eee;
+  font-size: 0.85rem;
+  resize: none;
+  min-height: 50px;
+}
+
+.kitchen-notes-form button {
+  padding: 8px 16px;
+  background: #f0a500;
+  color: #1a1a2e;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.85rem;
+  align-self: flex-start;
+}
+
+.kitchen-note-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  background: #0f3460;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  gap: 10px;
+  border-left: 3px solid #f0a500;
+}
+
+.kitchen-note-text {
+  flex: 1;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+
+.kitchen-note-meta {
+  font-size: 0.7rem;
+  color: #888;
+  margin-top: 4px;
+}
+
+.kitchen-note-item button {
+  background: transparent;
+  border: 1px solid #666;
+  color: #888;
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.kitchen-note-item button:hover {
+  border-color: #e94560;
+  color: #e94560;
+}
+
+.order-note-badge {
+  display: inline-block;
+  background: #4da8da22;
+  color: #4da8da;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  border: 1px solid #4da8da55;
+}
+
+.order-notes-list {
+  margin-bottom: 8px;
+}
+
+.order-note-item {
+  display: flex;
+  align-items: flex-start;
+  background: #0a2540;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  gap: 8px;
+  border-left: 3px solid #4da8da;
+}
+
+.order-note-text {
+  flex: 1;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  color: #cce;
+}
+
+.order-note-meta {
+  font-size: 0.68rem;
+  color: #777;
+  margin-top: 3px;
+}
+
+.order-note-delete {
+  background: transparent !important;
+  border: 1px solid #444 !important;
+  color: #666 !important;
+  border-radius: 4px !important;
+  padding: 2px 6px !important;
+  cursor: pointer;
+  font-size: 0.7rem !important;
+  width: auto !important;
+  flex-shrink: 0;
+}
+
+.order-note-delete:hover {
+  border-color: #e94560 !important;
+  color: #e94560 !important;
+}
+
+.order-note-form {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.order-note-form input {
+  flex: 1;
+  padding: 5px 10px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #0a2540;
+  color: #eee;
+  font-size: 0.8rem;
+}
+
+.order-note-form button {
+  padding: 5px 12px;
+  background: #4da8da;
+  color: #1a1a2e;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.78rem;
+  width: auto !important;
+}
+
+.order-note-form button:hover {
+  opacity: 0.85;
+}
+
+.btn-advance {
+  width: 100%;
+  margin-top: 4px;
+}
+
+/* ── Task C: Connection Badge ───────────────────────────────────────────── */
+
+.conn-badge {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-right: 10px;
+}
+
+.conn-badge.live {
+  background: #1a4a2e;
+  color: #2ecc71;
+}
+
+.conn-badge.reconnecting {
+  background: #4a3a10;
+  color: #f0a500;
+}
+
+/* ── Reset Button ───────────────────────────────────────────────────────── */
+
+.btn-reset {
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid #555;
+  color: #888;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-reset:hover {
+  border-color: #e94560;
+  color: #e94560;
+}
+
+/* ── Toast Error ────────────────────────────────────────────────────────── */
+
+.toast-error {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #e94560;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  z-index: 1000;
+  animation: toast-in 0.2s ease;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

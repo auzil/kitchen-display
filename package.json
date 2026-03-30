@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "server": "node server_solution.js",
+    "install:all": "npm install && cd client && npm install",
+    "server": "tsx watch server.ts",
     "client": "cd client && npx vite",
-    "dev": "npm run server & npm run client"
+    "dev": "npm run server & npm run client",
+    "build": "tsc",
+    "start": "node dist/server.js"
   },
   "keywords": [],
   "author": "",
@@ -14,6 +17,14 @@
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "socket.io": "^4.8.3"
+    "ws": "^8.18.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.3.2",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }

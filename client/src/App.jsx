@@ -1,28 +1,47 @@
-import React, { useState, useEffect } from 'react';
-import { io } from 'socket.io-client';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 
-const API = '/api';
-const socket = io();
+// ---------------------------------------------------------------------------
+// Toast
+// ---------------------------------------------------------------------------
+function Toast({ message, onDismiss }) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 5000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
 
+  return (
+    <div className="toast-error" onClick={onDismiss}>
+      {message}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// OrderCard
+// ---------------------------------------------------------------------------
 function OrderCard({ order, onAdvance }) {
   const nextLabel = { pending: 'Start Preparing', preparing: 'Mark Ready' };
+
   return (
     <div className="order-card">
       <div className="order-header">
         <strong>#{order.id}</strong>
         <span>Table {order.table}</span>
       </div>
+
       <ul>
         {order.items.map((item, i) => (
           <li key={i}>{item}</li>
         ))}
       </ul>
+
       <div className="order-time">
         {new Date(order.createdAt).toLocaleTimeString()}
       </div>
+
       {nextLabel[order.status] && (
-        <button onClick={() => onAdvance(order.id)}>
+        <button className="btn-advance" onClick={() => onAdvance(order.id)}>
           {nextLabel[order.status]}
         </button>
       )}
@@ -30,13 +49,15 @@ function OrderCard({ order, onAdvance }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// OrderForm
+// ---------------------------------------------------------------------------
 function OrderForm({ onSubmit }) {
   const [items, setItems] = useState('');
   const [table, setTable] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!items.trim()) return;
     onSubmit({
       items: items.split(',').map((s) => s.trim()).filter(Boolean),
       table: table || 'N/A',
@@ -51,7 +72,6 @@ function OrderForm({ onSubmit }) {
         placeholder="Items (comma separated)"
         value={items}
         onChange={(e) => setItems(e.target.value)}
-        required
       />
       <input
         placeholder="Table #"
@@ -63,6 +83,13 @@ function OrderForm({ onSubmit }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// KitchenNotesBoard — Task B: implement this component
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// ActivityFeed
+// ---------------------------------------------------------------------------
 function ActivityFeed({ activities }) {
   return (
     <div className="activity-feed">
@@ -79,51 +106,74 @@ function ActivityFeed({ activities }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// App
+// ---------------------------------------------------------------------------
 export default function App() {
   const [orders, setOrders] = useState([]);
   const [estimatedWait, setEstimatedWait] = useState(0);
   const [activities, setActivities] = useState([]);
+  const [toastMessage, setToastMessage] = useState(null);
+  const wsRef = useRef(null);
 
+  const showError = useCallback((msg) => setToastMessage(msg), []);
 
-  // this one could be also removed and implemented during live coding part
   useEffect(() => {
-    socket.on('orders:init', (data) => {
-      setOrders(data.orders);
-      setEstimatedWait(data.estimatedWait);
-      setActivities(data.activities || []);
-    });
+    const ws = new WebSocket(`ws://${window.location.host}/ws`);
+    wsRef.current = ws;
 
-    socket.on('order:created', (data) => {
-      setOrders((prev) => [...prev, data.order]);
-      setEstimatedWait(data.estimatedWait);
-      if (data.activity) setActivities((prev) => [...prev, data.activity]);
-    });
+    ws.onmessage = (event) => {
+      const { event: name, data } = JSON.parse(event.data);
 
-    socket.on('order:updated', (data) => {
-      setOrders((prev) =>
-        prev.map((o) => (o.id === data.order.id ? data.order : o))
-      );
-      setEstimatedWait(data.estimatedWait);
-      if (data.activity) setActivities((prev) => [...prev, data.activity]);
-    });
-
-    return () => {
-      socket.off('orders:init');
-      socket.off('order:created');
-      socket.off('order:updated');
+      switch (name) {
+        case 'orders:init':
+          setOrders(data.orders);
+          setEstimatedWait(data.estimatedWait);
+          setActivities(data.activities || []);
+          break;
+        case 'order:created':
+          setOrders((prev) => [...prev, data.order]);
+          setEstimatedWait(data.estimatedWait);
+          if (data.activity) setActivities((prev) => [...prev, data.activity]);
+          break;
+        case 'order:updated':
+          setOrders((prev) =>
+            prev.map((o) => (o.id === data.order.id ? data.order : o))
+          );
+          setEstimatedWait(data.estimatedWait);
+          if (data.activity) setActivities((prev) => [...prev, data.activity]);
+          break;
+      }
     };
+
+    // Task C: handle ws.onclose / reconnect logic here
+
+    return () => ws.close();
   }, []);
 
   const createOrder = async (data) => {
-    await fetch(`${API}/orders`, {
+    const res = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showError(body.error || 'Failed to place order');
+    }
   };
 
   const advanceOrder = async (id) => {
-    await fetch(`${API}/orders/${id}/status`, { method: 'PATCH' });
+    const res = await fetch(`/api/orders/${id}/status`, { method: 'PATCH' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showError(body.error || 'Failed to advance order');
+    }
+  };
+
+
+  const resetMemory = async () => {
+    await fetch('/api/reset', { method: 'POST' });
   };
 
   const pending = orders.filter((o) => o.status === 'pending');
@@ -132,29 +182,49 @@ export default function App() {
 
   return (
     <div className="app">
+      {toastMessage && (
+        <Toast message={toastMessage} onDismiss={() => setToastMessage(null)} />
+      )}
       <header>
         <h1>Kitchen Display</h1>
+        {/* Task C: connection badge goes here */}
         <span className="wait-badge">Est. wait: {estimatedWait} min</span>
+        <button className="btn-reset" onClick={resetMemory}>Reset</button>
       </header>
+
       <OrderForm onSubmit={createOrder} />
+      {/* Task B: render KitchenNotesBoard here */}
       <ActivityFeed activities={activities} />
+
       <div className="columns">
         <div className="column pending">
           <h2>Pending ({pending.length})</h2>
           {pending.map((o) => (
-            <OrderCard key={o.id} order={o} onAdvance={advanceOrder} />
+            <OrderCard
+              key={o.id}
+              order={o}
+              onAdvance={advanceOrder}
+            />
           ))}
         </div>
         <div className="column preparing">
           <h2>Preparing ({preparing.length})</h2>
           {preparing.map((o) => (
-            <OrderCard key={o.id} order={o} onAdvance={advanceOrder} />
+            <OrderCard
+              key={o.id}
+              order={o}
+              onAdvance={advanceOrder}
+            />
           ))}
         </div>
         <div className="column ready">
           <h2>Ready ({ready.length})</h2>
           {ready.map((o) => (
-            <OrderCard key={o.id} order={o} onAdvance={advanceOrder} />
+            <OrderCard
+              key={o.id}
+              order={o}
+              onAdvance={advanceOrder}
+            />
           ))}
         </div>
       </div>
