@@ -113,6 +113,12 @@ Reconnection logic goes in the `useEffect` in `App.jsx` where the comment `// Ta
 
 ---
 
+## Preview
+
+![Result](result_pic.png)
+
+---
+
 ## Running Locally
 
 ```bash
