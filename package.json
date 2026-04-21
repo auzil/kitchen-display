@@ -6,7 +6,6 @@
     "install:all": "npm install && cd client && npm install",
     "server": "tsx watch server.ts",
     "client": "cd client && npx vite",
-    "dev": "npm run server & npm run client",
     "build": "tsc",
     "start": "node dist/server.js"
   },

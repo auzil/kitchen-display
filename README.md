@@ -131,6 +131,4 @@ npm run server
 # Client (port 5173, proxies /api and /ws to 4001)
 npm run client
 
-# Both together
-npm run dev
 ```
